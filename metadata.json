@@ -1,0 +1,8 @@
+{
+  "name": "Remix Remix Slipstream Ram",
+  "description": "3D multiplayer arcade car racing game with room-code lobbies, AI fill racers, custom vehicles, lateral ram dashing, and a freehand community track editor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
