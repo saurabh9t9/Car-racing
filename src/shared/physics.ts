@@ -16,6 +16,18 @@ export const DASH_DURATION = 0.22;
 export const DASH_COOLDOWN = 1.45;
 export const BOOST_DURATION = 1.15;
 
+export interface OnlineInputFrame {
+  sequence: number;
+  input: RaceInput;
+  dt: number;
+}
+
+export interface OnlineVisualCorrection {
+  x: number;
+  z: number;
+  heading: number;
+}
+
 export const DEFAULT_CAR_CONFIG: VehicleConfig = {
   modelId: DEFAULT_MODEL_ID,
   chassis: 'coupe',
@@ -339,6 +351,46 @@ export function stepVehicle(
   }
 
   return { dashed, boosted, lapCompleted };
+}
+
+export function reconcileRacerFromServer(
+  predictedRacer: RacerState,
+  authoritativeRacer: RacerState,
+  acknowledgedSequence: number,
+  pendingInputs: OnlineInputFrame[],
+  track: CompiledTrack,
+  elapsedMs: number,
+  totalLaps: number,
+  visualCorrection: OnlineVisualCorrection,
+): {
+  pendingInputs: OnlineInputFrame[];
+  elapsedMs: number;
+  visualCorrection: OnlineVisualCorrection;
+} {
+  const unacknowledgedInputs = pendingInputs.filter(
+    (frame) => frame.sequence > acknowledgedSequence,
+  );
+  const renderedX = predictedRacer.x + visualCorrection.x;
+  const renderedZ = predictedRacer.z + visualCorrection.z;
+  const renderedHeading = predictedRacer.heading + visualCorrection.heading;
+  Object.assign(predictedRacer, authoritativeRacer);
+
+  let replayElapsedMs = elapsedMs;
+  for (const frame of unacknowledgedInputs) {
+    replayElapsedMs += frame.dt * 1000;
+    stepVehicle(predictedRacer, frame.input, track, frame.dt, replayElapsedMs, totalLaps);
+  }
+
+  const headingDelta = renderedHeading - predictedRacer.heading;
+  return {
+    pendingInputs: unacknowledgedInputs,
+    elapsedMs: replayElapsedMs,
+    visualCorrection: {
+      x: renderedX - predictedRacer.x,
+      z: renderedZ - predictedRacer.z,
+      heading: Math.atan2(Math.sin(headingDelta), Math.cos(headingDelta)),
+    },
+  };
 }
 
 /**

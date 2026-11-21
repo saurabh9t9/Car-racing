@@ -17,6 +17,7 @@ import {
   DASH_DURATION,
   DEFAULT_CAR_CONFIG,
   getEffectiveStats,
+  reconcileRacerFromServer,
   resolveObstacleCollisions,
   resolveVehicleCollisions,
   stepVehicle,
@@ -143,6 +144,55 @@ test('lateral ram dash activates, enters cooldown, and knocks rival car sideways
   assert.equal(attacker.ramHits, 1);
   assert.ok(victim.stunTimer > 0);
   assert.ok(Math.hypot(victim.vx, victim.vz) > 15);
+});
+
+test('online reconciliation replays only inputs not yet applied by the server', () => {
+  const track = compileTrack(STARTER_TRACKS[0], 200);
+  const authoritative = createGridRacers(
+    [{ id: 'p1', name: 'Driver', isBot: false, car: DEFAULT_CAR_CONFIG }],
+    track,
+  )[0];
+  const predicted = { ...authoritative, x: 100, z: 100 };
+  const acknowledgedFrame = {
+    sequence: 1,
+    input: { throttle: 1, brake: 0, steer: 0, dash: 0 as const },
+    dt: 0.05,
+  };
+  const pendingFrame = { ...acknowledgedFrame, sequence: 2 };
+  const expected = { ...authoritative };
+  stepVehicle(expected, pendingFrame.input, track, pendingFrame.dt, 50, 3);
+
+  const visualCorrection = { x: 2, z: -1, heading: Math.PI * 1.9 };
+  const renderedBefore = {
+    x: predicted.x + visualCorrection.x,
+    z: predicted.z + visualCorrection.z,
+    heading: predicted.heading + visualCorrection.heading,
+  };
+  const result = reconcileRacerFromServer(
+    predicted,
+    authoritative,
+    1,
+    [acknowledgedFrame, pendingFrame],
+    track,
+    0,
+    3,
+    visualCorrection,
+  );
+
+  assert.deepEqual(result.pendingInputs, [pendingFrame]);
+  assert.equal(result.elapsedMs, 50);
+  assert.equal(predicted.x, expected.x);
+  assert.equal(predicted.z, expected.z);
+  assert.ok(Math.abs(predicted.x + result.visualCorrection.x - renderedBefore.x) < 1e-9);
+  assert.ok(Math.abs(predicted.z + result.visualCorrection.z - renderedBefore.z) < 1e-9);
+  assert.ok(
+    Math.abs(
+      Math.atan2(
+        Math.sin(predicted.heading + result.visualCorrection.heading - renderedBefore.heading),
+        Math.cos(predicted.heading + result.visualCorrection.heading - renderedBefore.heading),
+      ),
+    ) < 1e-9,
+  );
 });
 
 test('chassis modifiers and 15-car catalog specs produce distinct effective capabilities', () => {

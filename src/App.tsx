@@ -108,7 +108,6 @@ export default function App() {
   const playerNameRef = useRef(playerName);
   playerNameRef.current = playerName;
   const roomRef = useRef(room);
-  roomRef.current = room;
   const playerIdRef = useRef(playerId);
   playerIdRef.current = playerId;
 
@@ -207,11 +206,16 @@ export default function App() {
           setLobbyError(null);
           setPlayerId(msg.playerId);
           setRoom(msg.room);
+          roomRef.current = msg.room;
           // Refresh tracks in case host picked a newly published community track
           fetchTracks();
         } else if (msg.type === 'room:state') {
           const prevRoom = roomRef.current;
-          setRoom(msg.room);
+          roomRef.current = msg.room;
+          const raceActive = screenRef.current === 'playing' || screenRef.current === 'paused';
+          if (!raceActive || msg.room.status === 'finished') {
+            setRoom(msg.room);
+          }
 
           // If host changed track to one we don't have locally yet, refresh tracks
           if (!tracksRef.current.some((t) => t.id === msg.room.config.trackId)) {
@@ -285,8 +289,8 @@ export default function App() {
           setScreen('gameover');
         }
       },
-      (input: RaceInput) => {
-        sendWs({ type: 'race:input', input });
+      (input: RaceInput, sequence: number) => {
+        sendWs({ type: 'race:input', input, sequence });
       },
       (loading: boolean) => {
         setModelLoading(loading);
@@ -393,6 +397,7 @@ export default function App() {
     if (room) {
       sendWs({ type: 'room:leave' });
       setRoom(null);
+      roomRef.current = null;
     }
     setIsOnlineRace(false);
     setScreen('title');
@@ -492,6 +497,7 @@ export default function App() {
           onLeaveRoom={() => {
             sendWs({ type: 'room:leave' });
             setRoom(null);
+            roomRef.current = null;
           }}
           onUpdateConfig={(patch) => sendWs({ type: 'room:update_config', config: patch })}
           onToggleReady={(ready) => sendWs({ type: 'room:ready', ready })}

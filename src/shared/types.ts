@@ -136,6 +136,7 @@ export interface RoomSnapshot {
   elapsedMs: number;
   config: RoomConfig;
   racers: RacerState[];
+  inputAcks?: Record<string, number>;
   hitEvents: HitEvent[];
   brokenObstacleIds?: string[];
 }
@@ -149,7 +150,7 @@ export type ClientMessage =
   | { type: 'room:ready'; ready: boolean }
   | { type: 'room:start' }
   | { type: 'room:rematch' }
-  | { type: 'race:input'; input: RaceInput };
+  | { type: 'race:input'; input: RaceInput; sequence: number };
 
 export type ServerMessage =
   | { type: 'welcome'; playerId: string }

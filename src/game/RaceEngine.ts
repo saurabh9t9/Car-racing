@@ -4,9 +4,12 @@ import {
   computeBotInput,
   createGridRacers,
   DEFAULT_CAR_CONFIG,
+  reconcileRacerFromServer,
   resolveObstacleCollisions,
   resolveVehicleCollisions,
   stepVehicle,
+  type OnlineInputFrame,
+  type OnlineVisualCorrection,
   updateStandings,
 } from '../shared/physics';
 import { compileTrack, sampleTrackAt, STARTER_TRACKS } from '../shared/trackMath';
@@ -127,6 +130,9 @@ export class RaceEngine {
   private totalLaps = 3;
   private localRacers: RacerState[] = [];
   private onlineTargetRacers = new Map<string, RacerState>();
+  private onlineInputSequence = 0;
+  private pendingOnlineInputs: OnlineInputFrame[] = [];
+  private onlineVisualCorrection: OnlineVisualCorrection = { x: 0, z: 0, heading: 0 };
   private raceStatus: 'countdown' | 'racing' | 'finished' = 'countdown';
   private countdownMs = 3000;
   private lastCountdownBeep = 4;
@@ -161,10 +167,9 @@ export class RaceEngine {
 
   // Callbacks
   private onHudUpdate: (hud: HudTelemetry) => void;
-  private onSendOnlineInput?: (input: RaceInput) => void;
+  private onSendOnlineInput?: (input: RaceInput, sequence: number) => void;
   private onModelLoadingChange?: (loading: boolean) => void;
   private lastHudEmitAt = 0;
-  private lastOnlineEmitAt = 0;
 
   // Resize observer
   private resizeObserver: ResizeObserver;
@@ -172,7 +177,7 @@ export class RaceEngine {
   constructor(
     container: HTMLElement,
     onHudUpdate: (hud: HudTelemetry) => void,
-    onSendOnlineInput?: (input: RaceInput) => void,
+    onSendOnlineInput?: (input: RaceInput, sequence: number) => void,
     onModelLoadingChange?: (loading: boolean) => void,
   ) {
     this.container = container;
@@ -776,6 +781,9 @@ export class RaceEngine {
     this.paused = false;
     this.isOnline = false;
     this.localId = 'player';
+    this.onlineInputSequence = 0;
+    this.pendingOnlineInputs = [];
+    this.onlineVisualCorrection = { x: 0, z: 0, heading: 0 };
     this.totalLaps = laps;
     this.garageGroup.visible = false;
     this.loadTrack(trackDef);
@@ -824,6 +832,9 @@ export class RaceEngine {
     this.paused = false;
     this.isOnline = true;
     this.localId = playerId;
+    this.onlineInputSequence = 0;
+    this.pendingOnlineInputs = [];
+    this.onlineVisualCorrection = { x: 0, z: 0, heading: 0 };
     this.totalLaps = snapshot.config.laps;
     this.garageGroup.visible = false;
     this.loadTrack(trackDef);
@@ -882,7 +893,6 @@ export class RaceEngine {
         this.attachCarModelAsync(rig, remote.car, remote.id === this.localId);
         this.localRacers.push({ ...remote });
       }
-      // Sync authoritative non-positional stats directly
       const localCopy = this.localRacers.find((r) => r.id === remote.id);
       if (localCopy) {
         if (localCopy.lap < remote.lap && remote.id === this.localId) {
@@ -891,18 +901,35 @@ export class RaceEngine {
         if (!localCopy.finished && remote.finished && remote.id === this.localId) {
           soundEngine.playLap(true);
         }
-        localCopy.lap = remote.lap;
-        localCopy.position = remote.position;
-        localCopy.finished = remote.finished;
-        localCopy.finishTimeMs = remote.finishTimeMs;
-        localCopy.bestLapMs = remote.bestLapMs;
-        localCopy.ramHits = remote.ramHits;
-        localCopy.dashCooldown = remote.dashCooldown;
-        localCopy.dashTimer = remote.dashTimer;
-        localCopy.dashDir = remote.dashDir;
-        localCopy.boostTimer = remote.boostTimer;
-        localCopy.stunTimer = remote.stunTimer;
-        localCopy.speed = remote.speed;
+        if (remote.id === this.localId) {
+          const ack = snapshot.inputAcks?.[this.localId] ?? this.onlineInputSequence;
+          const reconciliation = reconcileRacerFromServer(
+            localCopy,
+            remote,
+            ack,
+            this.raceStatus === 'racing' ? this.pendingOnlineInputs : [],
+            this.compiledTrack,
+            snapshot.elapsedMs,
+            this.totalLaps,
+            this.onlineVisualCorrection,
+          );
+          this.pendingOnlineInputs = reconciliation.pendingInputs;
+          this.elapsedMs = reconciliation.elapsedMs;
+          this.onlineVisualCorrection = reconciliation.visualCorrection;
+        } else {
+          localCopy.lap = remote.lap;
+          localCopy.position = remote.position;
+          localCopy.finished = remote.finished;
+          localCopy.finishTimeMs = remote.finishTimeMs;
+          localCopy.bestLapMs = remote.bestLapMs;
+          localCopy.ramHits = remote.ramHits;
+          localCopy.dashCooldown = remote.dashCooldown;
+          localCopy.dashTimer = remote.dashTimer;
+          localCopy.dashDir = remote.dashDir;
+          localCopy.boostTimer = remote.boostTimer;
+          localCopy.stunTimer = remote.stunTimer;
+          localCopy.speed = remote.speed;
+        }
       }
     }
 
@@ -920,7 +947,11 @@ export class RaceEngine {
       }
     }
 
-    this.emitHud(snapshot.countdownSec);
+    const now = performance.now();
+    if (now - this.lastHudEmitAt >= 65 || this.raceStatus !== prevStatus) {
+      this.lastHudEmitAt = now;
+      this.emitHud(snapshot.countdownSec);
+    }
   }
 
   public setPaused(paused: boolean): void {
@@ -1146,8 +1177,10 @@ export class RaceEngine {
       const rig = this.carRigs.get(racer.id);
       if (!rig) continue;
 
-      rig.root.position.set(racer.x, 0, racer.z);
-      rig.root.rotation.y = racer.heading;
+      const correction =
+        this.isOnline && racer.id === this.localId ? this.onlineVisualCorrection : null;
+      rig.root.position.set(racer.x + (correction?.x ?? 0), 0, racer.z + (correction?.z ?? 0));
+      rig.root.rotation.y = racer.heading + (correction?.heading ?? 0);
 
       // Dynamic body roll on steering & lateral dash tilt
       const dashTilt = racer.dashTimer > 0 ? racer.dashDir * -0.22 : 0;
@@ -1257,18 +1290,25 @@ export class RaceEngine {
       if (this.hitstopTimer > 0) {
         this.hitstopTimer = Math.max(0, this.hitstopTimer - dt);
       } else if (this.isOnline) {
-        // Send input to authoritative server & smoothly interpolate racer poses
-        const inp = this.sampleLocalInput();
-        if (inp.dash !== 0) {
-          soundEngine.playDash();
-        }
-        if (inp.dash !== 0 || now - this.lastOnlineEmitAt >= 45) {
-          this.lastOnlineEmitAt = now;
-          this.onSendOnlineInput?.(inp);
+        if (this.raceStatus === 'racing') {
+          const input = this.sampleLocalInput();
+          const sequence = ++this.onlineInputSequence;
+          this.onSendOnlineInput?.(input, sequence);
+          this.pendingOnlineInputs.push({ sequence, input, dt });
+          if (this.pendingOnlineInputs.length > 600) this.pendingOnlineInputs.shift();
+
+          this.elapsedMs += dt * 1000;
+          const local = this.localRacers.find((r) => r.id === this.localId);
+          if (local) {
+            const result = stepVehicle(local, input, this.compiledTrack, dt, this.elapsedMs, this.totalLaps);
+            if (result.dashed) soundEngine.playDash();
+            if (result.boosted) soundEngine.playBoost();
+          }
         }
 
         const interpAlpha = 1 - Math.exp(-16 * dt);
         for (const r of this.localRacers) {
+          if (r.id === this.localId) continue;
           const target = this.onlineTargetRacers.get(r.id);
           if (!target) continue;
           r.x += (target.x - r.x) * interpAlpha;
@@ -1340,6 +1380,13 @@ export class RaceEngine {
         }
       }
 
+      if (this.isOnline) {
+        const decay = Math.exp(-10 * dt);
+        this.onlineVisualCorrection.x *= decay;
+        this.onlineVisualCorrection.z *= decay;
+        this.onlineVisualCorrection.heading *= decay;
+      }
+
       this.syncVisualCarRigs(dt);
       this.updateParticles(dt);
     }
@@ -1347,16 +1394,21 @@ export class RaceEngine {
     // Chase Camera following local car
     const local = this.localRacers.find((r) => r.id === this.localId) ?? this.localRacers[0];
     if (local) {
-      const fwdX = Math.sin(local.heading);
-      const fwdZ = Math.cos(local.heading);
+      const correction =
+        this.isOnline && local.id === this.localId ? this.onlineVisualCorrection : null;
+      const localX = local.x + (correction?.x ?? 0);
+      const localZ = local.z + (correction?.z ?? 0);
+      const localHeading = local.heading + (correction?.heading ?? 0);
+      const fwdX = Math.sin(localHeading);
+      const fwdZ = Math.cos(localHeading);
       const speedRatio = Math.max(0, local.speed) / 60;
-      const desiredX = local.x - fwdX * (10.8 + speedRatio * 1.8);
-      const desiredZ = local.z - fwdZ * (10.8 + speedRatio * 1.8);
+      const desiredX = localX - fwdX * (10.8 + speedRatio * 1.8);
+      const desiredZ = localZ - fwdZ * (10.8 + speedRatio * 1.8);
       const desiredY = 4.45 + speedRatio * 0.55;
 
       const camDamp = 1 - Math.exp(-9.5 * dt);
       this.camPos.lerp(_v3A.set(desiredX, desiredY, desiredZ), camDamp);
-      this.camLook.lerp(_v3B.set(local.x + fwdX * 7.5, 1.35, local.z + fwdZ * 7.5), 1 - Math.exp(-13 * dt));
+      this.camLook.lerp(_v3B.set(localX + fwdX * 7.5, 1.35, localZ + fwdZ * 7.5), 1 - Math.exp(-13 * dt));
 
       // Decaying trauma shake
       const shake = this.trauma * this.trauma;

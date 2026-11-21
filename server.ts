@@ -32,6 +32,7 @@ import type {
 } from './src/shared/types';
 
 const PORT = Number(process.env.PORT) || 3000;
+const SERVER_TICK_MS = 1000 / 30;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 const BOT_NAMES = ['Vortex', 'Kestrel', 'Apex-9', 'Drifter', 'Torque', 'Camber'];
@@ -53,6 +54,8 @@ interface ConnectedPlayer {
   car: VehicleConfig;
   ready: boolean;
   input: RaceInput;
+  inputSequence: number;
+  inputAck: number;
 }
 
 interface Room {
@@ -68,7 +71,6 @@ interface Room {
   pendingHits: HitEvent[];
   brokenObstacleUntil: Map<string, number>;
   lastTickAt: number;
-  lastBroadcastAt: number;
 }
 
 const rooms = new Map<string, Room>();
@@ -159,6 +161,9 @@ function buildSnapshot(room: Room): RoomSnapshot {
     elapsedMs: Math.round(room.elapsedMs),
     config: room.config,
     racers,
+    inputAcks: Object.fromEntries(
+      Array.from(room.players.values(), (player) => [player.id, player.inputAck]),
+    ),
     hitEvents: room.pendingHits,
     brokenObstacleIds,
   };
@@ -176,6 +181,12 @@ function broadcastRoom(room: Room): void {
 }
 
 function startRaceInRoom(room: Room): void {
+  for (const player of room.players.values()) {
+    player.input = { throttle: 0, brake: 0, steer: 0, dash: 0 };
+    player.inputSequence = 0;
+    player.inputAck = 0;
+  }
+
   const trackDef = getTrackById(room.config.trackId) ?? STARTER_TRACKS[0];
   const compiled = compileTrack(trackDef, 240);
   room.compiledTrack = compiled;
@@ -213,7 +224,7 @@ function startRaceInRoom(room: Room): void {
   broadcastRoom(room);
 }
 
-// Authoritative 30Hz physics tick for active rooms
+// Simulate and broadcast online rooms together at 30Hz.
 setInterval(() => {
   const now = Date.now();
   for (const room of rooms.values()) {
@@ -240,6 +251,7 @@ setInterval(() => {
           const p = room.players.get(racer.id);
           if (p) {
             input = p.input;
+            p.inputAck = p.inputSequence;
             // Consume edge dash trigger once processed
             p.input = { ...p.input, dash: 0 };
           }
@@ -272,12 +284,9 @@ setInterval(() => {
       }
     }
 
-    if (now - room.lastBroadcastAt >= 48) {
-      room.lastBroadcastAt = now;
-      broadcastRoom(room);
-    }
+    broadcastRoom(room);
   }
-}, 33);
+}, SERVER_TICK_MS);
 
 async function bootstrap() {
   const app = express();
@@ -362,6 +371,8 @@ async function bootstrap() {
           car: msg.car || DEFAULT_CAR_CONFIG,
           ready: true,
           input: { throttle: 0, brake: 0, steer: 0, dash: 0 },
+          inputSequence: 0,
+          inputAck: 0,
         };
         const room: Room = {
           code,
@@ -380,7 +391,6 @@ async function bootstrap() {
           pendingHits: [],
           brokenObstacleUntil: new Map(),
           lastTickAt: Date.now(),
-          lastBroadcastAt: 0,
         };
         rooms.set(code, room);
         currentRoomCode = code;
@@ -411,6 +421,8 @@ async function bootstrap() {
           car: msg.car || DEFAULT_CAR_CONFIG,
           ready: true,
           input: { throttle: 0, brake: 0, steer: 0, dash: 0 },
+          inputSequence: 0,
+          inputAck: 0,
         };
         room.players.set(playerId, player);
         currentRoomCode = code;
@@ -451,6 +463,8 @@ async function bootstrap() {
         room.brokenObstacleUntil.clear();
         broadcastRoom(room);
       } else if (msg.type === 'race:input') {
+        if (!Number.isSafeInteger(msg.sequence) || msg.sequence <= player.inputSequence) return;
+        player.inputSequence = msg.sequence;
         player.input = {
           throttle: Math.max(0, Math.min(1, Number(msg.input.throttle) || 0)),
           brake: Math.max(0, Math.min(1, Number(msg.input.brake) || 0)),
