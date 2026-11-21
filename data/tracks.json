@@ -1,8 +1,8 @@
 [
   {
-    "id": "alpine",
-    "name": "Alpine ",
-    "author": "official Works",
+    "id": "alpine-apex",
+    "name": "Alpine Apex",
+    "author": "Apex Works",
     "theme": "alpine",
     "roadWidth": 18,
     "controlPoints": [
@@ -57,13 +57,57 @@
       0.62,
       0.86
     ],
+    "obstacles": [
+      {
+        "id": "alp-obs-0",
+        "t": 0.038,
+        "lateral": 3.4,
+        "kind": "cone_cluster"
+      },
+      {
+        "id": "alp-obs-1",
+        "t": 0.085,
+        "lateral": -3.6,
+        "kind": "barricade"
+      },
+      {
+        "id": "alp-obs-2",
+        "t": 0.22,
+        "lateral": 4.4,
+        "kind": "tire_stack"
+      },
+      {
+        "id": "alp-obs-3",
+        "t": 0.44,
+        "lateral": 0.5,
+        "kind": "cone_cluster"
+      },
+      {
+        "id": "alp-obs-4",
+        "t": 0.55,
+        "lateral": 4.2,
+        "kind": "barricade"
+      },
+      {
+        "id": "alp-obs-5",
+        "t": 0.74,
+        "lateral": -4.5,
+        "kind": "tire_stack"
+      },
+      {
+        "id": "alp-obs-6",
+        "t": 0.9,
+        "lateral": -2.2,
+        "kind": "cone_cluster"
+      }
+    ],
     "isBuiltIn": true,
     "createdAt": 1700000000000
   },
   {
-    "id": "canyon-",
-    "name": "Canyon ",
-    "author": "official Works",
+    "id": "canyon-switchback",
+    "name": "Canyon Switchback",
+    "author": "Apex Works",
     "theme": "sunset",
     "roadWidth": 17,
     "controlPoints": [
@@ -113,13 +157,45 @@
       0.42,
       0.78
     ],
+    "obstacles": [
+      {
+        "id": "can-obs-1",
+        "t": 0.16,
+        "lateral": 3.8,
+        "kind": "tire_stack"
+      },
+      {
+        "id": "can-obs-2",
+        "t": 0.3,
+        "lateral": -3.5,
+        "kind": "barricade"
+      },
+      {
+        "id": "can-obs-3",
+        "t": 0.5,
+        "lateral": 1.5,
+        "kind": "cone_cluster"
+      },
+      {
+        "id": "can-obs-4",
+        "t": 0.68,
+        "lateral": 3.9,
+        "kind": "barricade"
+      },
+      {
+        "id": "can-obs-5",
+        "t": 0.88,
+        "lateral": -3.8,
+        "kind": "tire_stack"
+      }
+    ],
     "isBuiltIn": true,
     "createdAt": 1700000001000
   },
   {
     "id": "midnight-marina",
     "name": "Midnight Marina",
-    "author": "official Works",
+    "author": "Apex Works",
     "theme": "midnight",
     "roadWidth": 20,
     "controlPoints": [
@@ -162,7 +238,191 @@
       0.62,
       0.87
     ],
+    "obstacles": [
+      {
+        "id": "mar-obs-1",
+        "t": 0.2,
+        "lateral": -4.8,
+        "kind": "barricade"
+      },
+      {
+        "id": "mar-obs-2",
+        "t": 0.28,
+        "lateral": 4.8,
+        "kind": "barricade"
+      },
+      {
+        "id": "mar-obs-3",
+        "t": 0.48,
+        "lateral": -1.8,
+        "kind": "cone_cluster"
+      },
+      {
+        "id": "mar-obs-4",
+        "t": 0.7,
+        "lateral": 4.5,
+        "kind": "tire_stack"
+      },
+      {
+        "id": "mar-obs-5",
+        "t": 0.82,
+        "lateral": -4.2,
+        "kind": "cone_cluster"
+      }
+    ],
     "isBuiltIn": true,
     "createdAt": 1700000002000
+  },
+  {
+    "id": "trk-mwqatf63-gng0",
+    "name": "Kiru",
+    "author": "Apex Driver",
+    "theme": "midnight",
+    "roadWidth": 18,
+    "controlPoints": [
+      {
+        "x": -179.67022294837264,
+        "z": -200.7465753201392
+      },
+      {
+        "x": -211.2,
+        "z": -172.01876813928214
+      },
+      {
+        "x": -211.2,
+        "z": -85.24906150385593
+      },
+      {
+        "x": -159.44347643181123,
+        "z": -69.41943780087861
+      },
+      {
+        "x": -148.45070877314046,
+        "z": 52.52721203681077
+      },
+      {
+        "x": -89.52936873039867,
+        "z": 60.73514429349384
+      },
+      {
+        "x": -4.6650580446247325,
+        "z": 114.08677776604432
+      },
+      {
+        "x": 66.12847726902656,
+        "z": 117.6045178448191
+      },
+      {
+        "x": 111.85844741065205,
+        "z": 50.18207166539037
+      },
+      {
+        "x": 102.6245349764588,
+        "z": -30.724828323951083
+      },
+      {
+        "x": 125.92924492400712,
+        "z": -97.56097464970262
+      },
+      {
+        "x": 20.83818772167179,
+        "z": -106.35520676006288
+      },
+      {
+        "x": -50.83477520421827,
+        "z": -171.43248304642702
+      },
+      {
+        "x": -68.86294161956658,
+        "z": -149.74003793654288
+      },
+      {
+        "x": -55.6715938596827,
+        "z": -95.21583427828222
+      },
+      {
+        "x": -107.1178324102438,
+        "z": -92.870723428506
+      },
+      {
+        "x": -139.21677419771476,
+        "z": -172.60503847131514
+      },
+      {
+        "x": -160.32290404404995,
+        "z": -187.26210674940435
+      }
+    ],
+    "boostPads": [
+      0.16,
+      0.52,
+      0.82,
+      0.322,
+      0.433
+    ],
+    "obstacles": [
+      {
+        "id": "custom-obs-mwqasrez-0",
+        "t": 0.228,
+        "lateral": -0.7,
+        "kind": "barricade"
+      },
+      {
+        "id": "custom-obs-mwqassj3-1",
+        "t": 0.389,
+        "lateral": -4.9,
+        "kind": "barricade"
+      },
+      {
+        "id": "custom-obs-mwqasto6-2",
+        "t": 0.694,
+        "lateral": 2.1,
+        "kind": "barricade"
+      },
+      {
+        "id": "custom-obs-mwqasw9d-3",
+        "t": 0.95,
+        "lateral": -6.4,
+        "kind": "tire_stack"
+      },
+      {
+        "id": "custom-obs-mwqasx6h-4",
+        "t": 0.089,
+        "lateral": -4.5,
+        "kind": "tire_stack"
+      },
+      {
+        "id": "custom-obs-mwqasya3-5",
+        "t": 0.278,
+        "lateral": -0.8,
+        "kind": "tire_stack"
+      },
+      {
+        "id": "custom-obs-mwqaszg5-6",
+        "t": 0.478,
+        "lateral": 2,
+        "kind": "tire_stack"
+      },
+      {
+        "id": "custom-obs-mwqat1xh-7",
+        "t": 0.65,
+        "lateral": -6.8,
+        "kind": "cone_cluster"
+      },
+      {
+        "id": "custom-obs-mwqat30y-8",
+        "t": 0.583,
+        "lateral": -0.4,
+        "kind": "cone_cluster"
+      },
+      {
+        "id": "custom-obs-mwqat53c-9",
+        "t": 0.894,
+        "lateral": 6.8,
+        "kind": "cone_cluster"
+      }
+    ],
+    "isBuiltIn": false,
+    "createdAt": 1795258934287
   }
-  ]
+]
