@@ -23,7 +23,9 @@ import type {
   ServerMessage,
   TrackDefinition,
   VehicleConfig,
+  WeatherPreset,
 } from './shared/types';
+import { getDefaultWeatherForTheme, isWeatherPreset } from './shared/weather';
 
 type ActiveScreen = 'loading' | 'title' | 'garage' | 'studio' | 'lobby' | 'playing' | 'paused' | 'gameover';
 
@@ -80,6 +82,9 @@ export default function App() {
   });
   const [tracks, setTracks] = useState<TrackDefinition[]>(STARTER_TRACKS);
   const [selectedTrackId, setSelectedTrackId] = useState<string>(STARTER_TRACKS[0].id);
+  const [weather, setWeather] = useState<WeatherPreset>(() =>
+    getDefaultWeatherForTheme(STARTER_TRACKS[0].theme),
+  );
   const [playerName, setPlayerName] = useState<string>(loadSavedName);
   const [car, setCar] = useState<VehicleConfig>(loadSavedCar);
   const [carThumbnails, setCarThumbnails] = useState<Record<string, string>>({});
@@ -103,6 +108,9 @@ export default function App() {
   tracksRef.current = tracks;
   const selectedTrackIdRef = useRef(selectedTrackId);
   selectedTrackIdRef.current = selectedTrackId;
+  const weatherRef = useRef(weather);
+  weatherRef.current = weather;
+  const weatherLockedRef = useRef(false);
   const carRef = useRef(car);
   carRef.current = car;
   const playerNameRef = useRef(playerName);
@@ -113,7 +121,7 @@ export default function App() {
 
   const selectedTrack = tracks.find((t) => t.id === selectedTrackId) ?? tracks[0];
 
-  // Mirror game state to document.body.dataset.state
+  // Mirror game state & active weather to document.body.dataset
   useEffect(() => {
     if (screen === 'loading') document.body.dataset.state = 'loading';
     else if (screen === 'playing') document.body.dataset.state = 'playing';
@@ -121,6 +129,10 @@ export default function App() {
     else if (screen === 'gameover') document.body.dataset.state = 'gameover';
     else document.body.dataset.state = 'title';
   }, [screen]);
+
+  useEffect(() => {
+    document.body.dataset.weather = weather;
+  }, [weather]);
 
   // Persist car & callsign
   useEffect(() => {
@@ -229,13 +241,18 @@ export default function App() {
           ) {
             const trackDef =
               tracksRef.current.find((t) => t.id === msg.room.config.trackId) ?? STARTER_TRACKS[0];
+            const roomWeather = isWeatherPreset(msg.room.config.weather)
+              ? msg.room.config.weather
+              : getDefaultWeatherForTheme(trackDef.theme);
             setSelectedTrackId(trackDef.id);
+            setWeather(roomWeather);
             setIsOnlineRace(true);
             setScreen('playing');
             engineRef.current?.startOnlineRace(
               msg.room,
               playerIdRef.current ?? '',
               trackDef,
+              roomWeather,
             );
           } else if (
             (msg.room.status === 'countdown' || msg.room.status === 'racing') &&
@@ -271,7 +288,14 @@ export default function App() {
       setIsOnlineRace(false);
       setHudSettingsOpen(false);
       setScreen('playing');
-      engineRef.current?.startSoloRace(playerNameRef.current, carRef.current, trk, 3, 5);
+      engineRef.current?.startSoloRace(
+        playerNameRef.current,
+        carRef.current,
+        trk,
+        3,
+        5,
+        weatherRef.current,
+      );
     },
     [],
   );
@@ -312,9 +336,22 @@ export default function App() {
       window.setTimeout(() => {
         if (cancelled) return;
         if (autostart) {
+          const paramWeather = params.get('weather');
+          const startWeather = isWeatherPreset(paramWeather) ? paramWeather : weatherRef.current;
+          if (isWeatherPreset(paramWeather)) {
+            weatherLockedRef.current = true;
+            setWeather(startWeather);
+          }
           setIsOnlineRace(false);
           setScreen('playing');
-          engine.startSoloRace(playerNameRef.current, carRef.current, STARTER_TRACKS[0], 3, 5);
+          engine.startSoloRace(
+            playerNameRef.current,
+            carRef.current,
+            STARTER_TRACKS[0],
+            3,
+            5,
+            startWeather,
+          );
         } else {
           setScreen('title');
         }
@@ -377,10 +414,23 @@ export default function App() {
   const handleSelectTrack = (id: string) => {
     setSelectedTrackId(id);
     const trk = tracks.find((t) => t.id === id);
-    if (trk && screen === 'title') {
-      engineRef.current?.loadTrack(trk);
+    if (!trk) return;
+    const nextWeather = weatherLockedRef.current
+      ? weather
+      : getDefaultWeatherForTheme(trk.theme);
+    if (!weatherLockedRef.current) {
+      setWeather(nextWeather);
+    }
+    if (screen === 'title') {
+      engineRef.current?.loadTrack(trk, nextWeather);
       engineRef.current?.enterTitleMode(car);
     }
+  };
+
+  const handleSelectWeather = (nextWeather: WeatherPreset) => {
+    weatherLockedRef.current = true;
+    setWeather(nextWeather);
+    engineRef.current?.setWeather(nextWeather);
   };
 
   const handleChangeCar = (nextCar: VehicleConfig) => {
@@ -401,7 +451,7 @@ export default function App() {
     }
     setIsOnlineRace(false);
     setScreen('title');
-    engineRef.current?.loadTrack(selectedTrack);
+    engineRef.current?.loadTrack(selectedTrack, weather);
     engineRef.current?.enterTitleMode(car);
   };
 
@@ -421,6 +471,8 @@ export default function App() {
           tracks={tracks}
           selectedTrackId={selectedTrackId}
           onSelectTrack={handleSelectTrack}
+          weather={weather}
+          onSelectWeather={handleSelectWeather}
           onQuickRace={() => startSoloRace()}
           onOpenMultiplayer={() => {
             setLobbyError(null);
@@ -454,7 +506,7 @@ export default function App() {
           onChangeCar={handleChangeCar}
           onClose={() => {
             setScreen('title');
-            engineRef.current?.loadTrack(selectedTrack);
+            engineRef.current?.loadTrack(selectedTrack, weather);
             engineRef.current?.enterTitleMode(car);
           }}
         />
@@ -464,10 +516,16 @@ export default function App() {
         <TrackStudioModal
           authorName={playerName}
           onTrackPublished={(newTrack) => {
+            const nextWeather = weatherLockedRef.current
+              ? weather
+              : getDefaultWeatherForTheme(newTrack.theme);
+            if (!weatherLockedRef.current) {
+              setWeather(nextWeather);
+            }
             setTracks((prev) => [newTrack, ...prev]);
             setSelectedTrackId(newTrack.id);
             setScreen('title');
-            engineRef.current?.loadTrack(newTrack);
+            engineRef.current?.loadTrack(newTrack, nextWeather);
             engineRef.current?.enterTitleMode(car);
           }}
           onClose={() => setScreen('title')}
@@ -488,7 +546,13 @@ export default function App() {
           }}
           onCreateRoom={() => {
             setLobbyError(null);
-            sendWs({ type: 'room:create', name: playerName, car, trackId: selectedTrackId });
+            sendWs({
+              type: 'room:create',
+              name: playerName,
+              car,
+              trackId: selectedTrackId,
+              weather,
+            });
           }}
           onJoinRoom={(code) => {
             setLobbyError(null);

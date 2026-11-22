@@ -78,22 +78,24 @@ export const GarageModal: React.FC<GarageModalProps> = ({
   const activeModelId = car.modelId ?? DEFAULT_MODEL_ID;
   const activeSpec = getCarModelSpec(activeModelId) ?? CAR_MODELS[0];
 
-  const activeSummary = useMemo(
-    () => getCarPerformanceSummary(buildModelConfig(car, activeSpec)),
-    [car, activeSpec],
-  );
+  const summariesById = useMemo(() => {
+    const map: Record<string, ReturnType<typeof getCarPerformanceSummary>> = {};
+    for (const m of CAR_MODELS) {
+      map[m.id] = getCarPerformanceSummary(buildModelConfig(car, m));
+    }
+    return map;
+  }, [car.stats]);
+
+  const activeSummary =
+    summariesById[activeSpec.id] ?? getCarPerformanceSummary(buildModelConfig(car, activeSpec));
 
   const filteredModels = useMemo(() => {
     const base =
       category === 'All' ? [...CAR_MODELS] : CAR_MODELS.filter((m) => m.category === category);
 
-    base.sort((a, b) => {
-      const ra = getCarPerformanceSummary(buildModelConfig(car, a)).rating;
-      const rb = getCarPerformanceSummary(buildModelConfig(car, b)).rating;
-      return rb - ra;
-    });
+    base.sort((a, b) => (summariesById[b.id]?.rating ?? 0) - (summariesById[a.id]?.rating ?? 0));
     return base;
-  }, [category, car]);
+  }, [category, summariesById]);
 
   const selectedIndex = Math.max(
     0,
@@ -190,7 +192,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
         </div>
 
         <div className="pointer-events-auto flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-1 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-0.5 rounded-sm bg-[#141820]/80 border border-white/15 backdrop-blur-sm">
+          <div className="flex items-center gap-2 px-3 py-1 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-0.5 rounded-sm bg-[#141820]/95 border border-white/15">
             <label
               htmlFor="garage-driver-name"
               className="text-[10px] sm:text-[11px] [@media(max-height:540px)]:text-[9px] uppercase tracking-wider font-semibold text-slate-400"
@@ -399,7 +401,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
       <div className="shrink-0 space-y-1.5 sm:space-y-2 [@media(max-height:540px)]:space-y-1">
         {/* Category Tabs + Prev/Next Controls */}
         <div className="pointer-events-auto flex items-center justify-between gap-2">
-          <div className="inline-flex items-center gap-1 p-1 [@media(max-height:540px)]:p-0.5 rounded-sm bg-[#12161f]/85 border border-white/12 backdrop-blur-md overflow-x-auto no-scrollbar">
+          <div className="inline-flex items-center gap-1 p-1 [@media(max-height:540px)]:p-0.5 rounded-sm bg-[#12161f]/95 border border-white/12 overflow-x-auto no-scrollbar">
             {CATEGORY_TABS.map((tab) => {
               const active = category === tab;
               return (
@@ -447,7 +449,8 @@ export const GarageModal: React.FC<GarageModalProps> = ({
         >
           {filteredModels.map((m) => {
             const selected = activeSpec.id === m.id;
-            const summary = getCarPerformanceSummary(buildModelConfig(car, m));
+            const summary =
+              summariesById[m.id] ?? getCarPerformanceSummary(buildModelConfig(car, m));
             const thumb = thumbnails[m.id];
 
             return (

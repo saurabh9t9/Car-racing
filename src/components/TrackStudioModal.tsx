@@ -25,6 +25,8 @@ const THEMES: Array<{ id: TrackTheme; label: string; bg: string; road: string }>
   { id: 'alpine', label: 'Alpine Day', bg: '#2c4932', road: '#334155' },
   { id: 'sunset', label: 'Sunset Canyon', bg: '#6c3e26', road: '#383034' },
   { id: 'midnight', label: 'Midnight Marina', bg: '#152033', road: '#1e293b' },
+  { id: 'coastal', label: 'Pacific Coastline', bg: '#706246', road: '#2b3440' },
+  { id: 'sakura', label: 'Sakura Pass', bg: '#4a3d4c', road: '#2b303a' },
 ];
 
 export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({

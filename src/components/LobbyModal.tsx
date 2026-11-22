@@ -1,11 +1,16 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import ArrowLeft from 'lucide-react/dist/esm/icons/arrow-left.js';
 import Check from 'lucide-react/dist/esm/icons/check.js';
+import CloudRain from 'lucide-react/dist/esm/icons/cloud-rain.js';
 import Copy from 'lucide-react/dist/esm/icons/copy.js';
+import Moon from 'lucide-react/dist/esm/icons/moon.js';
 import Play from 'lucide-react/dist/esm/icons/play.js';
 import Plus from 'lucide-react/dist/esm/icons/plus.js';
+import Sun from 'lucide-react/dist/esm/icons/sun.js';
 import Users from 'lucide-react/dist/esm/icons/users.js';
-import type { RoomSnapshot, TrackDefinition } from '../shared/types';
+import { buildTrackPreviewSummary } from '../shared/trackMath';
+import type { RoomSnapshot, TrackDefinition, WeatherPreset } from '../shared/types';
+import { getDefaultWeatherForTheme, WEATHER_PRESETS } from '../shared/weather';
 
 interface LobbyModalProps {
   room: RoomSnapshot | null;
@@ -18,7 +23,7 @@ interface LobbyModalProps {
   onCreateRoom: () => void;
   onJoinRoom: (code: string) => void;
   onLeaveRoom: () => void;
-  onUpdateConfig: (patch: { trackId?: string; laps?: number; aiCount?: number }) => void;
+  onUpdateConfig: (patch: { trackId?: string; laps?: number; aiCount?: number; weather?: WeatherPreset }) => void;
   onToggleReady: (ready: boolean) => void;
   onStartRace: () => void;
   onClose: () => void;
@@ -47,6 +52,11 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
   const localRacer = room && playerId ? room.racers.find((r) => r.id === playerId) : undefined;
   const selectedTrack = room ? tracks.find((t) => t.id === room.config.trackId) ?? tracks[0] : tracks[0];
 
+  const trackPreview = useMemo(
+    () => (selectedTrack ? buildTrackPreviewSummary(selectedTrack, 108, 12) : null),
+    [selectedTrack],
+  );
+
   const handleCopyCode = () => {
     if (!room) return;
     navigator.clipboard?.writeText(room.code).catch(() => {});
@@ -55,10 +65,15 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-30 bg-[#11151c]/95 flex items-center justify-center p-4 md:p-8">
-      <div className="w-full max-w-3xl rounded-xl bg-[#161c26] border border-white/15 p-6 md:p-7 space-y-6 max-h-[92vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-30 flex items-center justify-center p-4 md:p-8"
+      style={{
+        background: 'radial-gradient(circle at 20% 0%, #1a2844 0%, #0f141e 62%, #0b0e14 100%)',
+      }}
+    >
+      <div className="w-full max-w-4xl rounded-xl bg-[#131a27] border border-white/15 p-5 md:p-7 space-y-6 max-h-[92vh] overflow-y-auto shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -66,14 +81,14 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
                 if (room) onLeaveRoom();
                 onClose();
               }}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#10141c] border border-white/15 text-xs font-semibold text-white hover:bg-[#232b38] cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0b1019] border border-white/15 text-xs font-semibold text-white hover:bg-[#1e2738] cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back</span>
             </button>
             <div>
-              <h2 className="font-display text-xl font-bold text-white">
-                {room ? `Room ${room.code}` : 'Multiplayer Room'}
+              <h2 className="font-display text-xl md:text-2xl font-bold uppercase tracking-wide text-white">
+                {room ? `Room ${room.code}` : 'Multiplayer Hub'}
               </h2>
               <p className="text-xs text-slate-400">
                 {connected ? 'Live WebSocket server connected' : 'Connecting to race server...'}
@@ -85,7 +100,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
             <button
               type="button"
               onClick={handleCopyCode}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#10141c] border border-white/15 text-xs font-mono-num font-bold text-white hover:border-[#ff4d2e] cursor-pointer"
+              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#0b1019] border border-white/15 text-xs font-mono-num font-bold text-white hover:border-[#ff4d2e] cursor-pointer"
             >
               {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-400" />}
               <span>{copied ? 'Copied!' : room.code}</span>
@@ -103,8 +118,8 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
           /* Entry: Create or Join by Room Code */
           <div className="space-y-6">
             <div>
-              <label htmlFor="lobby-driver-name" className="block text-xs font-medium text-slate-300 mb-1.5">
-                Your Driver Callsign
+              <label htmlFor="lobby-driver-name" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+                Driver Callsign
               </label>
               <input
                 id="lobby-driver-name"
@@ -113,17 +128,20 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
                 value={playerName}
                 onChange={(e) => onChangeName(e.target.value)}
                 placeholder="Apex Driver"
-                className="w-full max-w-sm px-3.5 py-2.5 rounded-lg bg-[#10141c] border border-white/15 text-sm text-white focus:outline-none focus:border-[#ff4d2e]"
+                className="w-full max-w-sm px-3.5 py-2.5 rounded-lg bg-[#0b1019] border border-white/15 text-sm font-semibold text-white focus:outline-none focus:border-[#ff4d2e]"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* Create Room */}
-              <div className="rounded-xl bg-[#10141c] border border-white/10 p-5 flex flex-col justify-between gap-4">
+              <div className="rounded-xl bg-[#0b1019] border border-white/12 p-5 flex flex-col justify-between gap-5">
                 <div>
-                  <h3 className="font-display text-lg font-bold text-white">Host a New Room</h3>
-                  <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                    Generate a 6-character room code, choose any community circuit, and configure AI fill racers.
+                  <span className="text-[11px] font-display font-bold uppercase tracking-widest text-[#ff4d2e]">
+                    Private Grid
+                  </span>
+                  <h3 className="mt-1 font-display text-lg font-bold text-white">Host a New Room</h3>
+                  <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
+                    Generate a 6-character room code, choose any official or community circuit, set weather, and add AI fill racers.
                   </p>
                 </div>
                 <button
@@ -145,12 +163,15 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
                     onJoinRoom(joinCode.trim().toUpperCase());
                   }
                 }}
-                className="rounded-xl bg-[#10141c] border border-white/10 p-5 flex flex-col justify-between gap-4"
+                className="rounded-xl bg-[#0b1019] border border-white/12 p-5 flex flex-col justify-between gap-5"
               >
                 <div>
-                  <h3 className="font-display text-lg font-bold text-white">Join with Room Code</h3>
-                  <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                    Enter your friend&apos;s 6-character code to join their grid immediately.
+                  <span className="text-[11px] font-display font-bold uppercase tracking-widest text-[#0ea5e9]">
+                    Direct Invite
+                  </span>
+                  <h3 className="mt-1 font-display text-lg font-bold text-white">Join with Room Code</h3>
+                  <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
+                    Enter your friend&apos;s 6-character code to join their starting grid immediately.
                   </p>
                   <input
                     type="text"
@@ -159,7 +180,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
                     onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                     placeholder="e.g. APEX7K"
                     aria-label="Room Code"
-                    className="mt-3 w-full px-3.5 py-2.5 rounded-lg bg-[#161c26] border border-white/15 font-mono-num text-base tracking-widest uppercase text-white focus:outline-none focus:border-[#0ea5e9]"
+                    className="mt-3 w-full px-3.5 py-2.5 rounded-lg bg-[#131a27] border border-white/15 font-mono-num text-base tracking-widest uppercase text-white focus:outline-none focus:border-[#0ea5e9]"
                   />
                 </div>
                 <button
@@ -176,30 +197,84 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
         ) : (
           /* Inside Room Lobby */
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            {/* Left: Race Settings */}
+            {/* Left: Race Settings & Circuit SVG Preview */}
             <div className="md:col-span-5 space-y-4">
-              <div>
-                <label htmlFor="room-track-select" className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Circuit
-                </label>
-                <select
-                  id="room-track-select"
-                  disabled={!isHost}
-                  value={room.config.trackId}
-                  onChange={(e) => onUpdateConfig({ trackId: e.target.value })}
-                  className="w-full px-3 py-2.5 rounded-lg bg-[#10141c] border border-white/15 text-xs font-medium text-white disabled:opacity-65 cursor-pointer"
-                >
-                  {tracks.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} · {t.isBuiltIn ? 'Official' : `by ${t.author}`}
-                    </option>
-                  ))}
-                </select>
-                {selectedTrack && (
-                  <p className="mt-1.5 text-[11px] text-slate-400">
-                    Theme: {selectedTrack.theme} · Road Width: {selectedTrack.roadWidth}m
-                  </p>
+              <div className="rounded-xl bg-[#0b1019] border border-white/10 p-3.5 flex items-center gap-3">
+                {trackPreview && (
+                  <div className="w-20 h-20 shrink-0 rounded-lg bg-[#131a27] border border-white/10 flex items-center justify-center">
+                    <svg viewBox="0 0 108 108" className="w-full h-full" aria-hidden="true">
+                      <path
+                        d={trackPreview.svgPath}
+                        fill="none"
+                        stroke="rgba(14,165,233,0.3)"
+                        strokeWidth="8"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d={trackPreview.svgPath}
+                        fill="none"
+                        stroke="#f8fafc"
+                        strokeWidth="3"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </div>
                 )}
+                <div className="flex-1 min-w-0">
+                  <label htmlFor="room-track-select" className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+                    Circuit
+                  </label>
+                  <select
+                    id="room-track-select"
+                    disabled={!isHost}
+                    value={room.config.trackId}
+                    onChange={(e) => onUpdateConfig({ trackId: e.target.value })}
+                    className="w-full px-2.5 py-2 rounded-lg bg-[#131a27] border border-white/15 text-xs font-medium text-white disabled:opacity-65 cursor-pointer"
+                  >
+                    {tracks.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} · {t.isBuiltIn ? 'Official' : `by ${t.author}`}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedTrack && trackPreview && (
+                    <p className="mt-1.5 font-mono-num text-[11px] text-slate-400 truncate">
+                      {trackPreview.lengthMeters}m · {selectedTrack.roadWidth}m wide · {selectedTrack.theme}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <span id="room-weather-label" className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Weather Preset
+                </span>
+                <div role="group" aria-labelledby="room-weather-label" className="grid grid-cols-3 gap-2">
+                  {WEATHER_PRESETS.map((preset) => {
+                    const activeWeather =
+                      room.config.weather ??
+                      getDefaultWeatherForTheme(selectedTrack?.theme ?? 'alpine');
+                    const active = activeWeather === preset.id;
+                    const Icon = preset.id === 'sunny' ? Sun : preset.id === 'rainy' ? CloudRain : Moon;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        disabled={!isHost}
+                        aria-pressed={active}
+                        onClick={() => onUpdateConfig({ weather: preset.id })}
+                        className={`flex items-center justify-center gap-1.5 py-2 rounded-lg border text-xs font-semibold cursor-pointer disabled:cursor-default ${
+                          active
+                            ? 'bg-[#ff4d2e]/20 border-[#ff4d2e] text-white'
+                            : 'bg-[#0b1019] border-white/10 text-slate-300'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{preset.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>
@@ -214,7 +289,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
                       className={`py-2 rounded-lg border text-xs font-mono-num font-bold cursor-pointer disabled:cursor-default ${
                         room.config.laps === lapOpt
                           ? 'bg-[#ff4d2e]/20 border-[#ff4d2e] text-white'
-                          : 'bg-[#10141c] border-white/10 text-slate-300'
+                          : 'bg-[#0b1019] border-white/10 text-slate-300'
                       }`}
                     >
                       {lapOpt} Laps
@@ -244,7 +319,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
               <button
                 type="button"
                 onClick={onLeaveRoom}
-                className="w-full py-2.5 rounded-lg bg-[#10141c] border border-white/15 text-xs font-semibold text-slate-300 hover:text-white hover:bg-[#1f2735] cursor-pointer"
+                className="w-full py-2.5 rounded-lg bg-[#0b1019] border border-white/15 text-xs font-semibold text-slate-300 hover:text-white hover:bg-[#1a2232] cursor-pointer"
               >
                 Leave Room
               </button>
@@ -262,7 +337,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
                   {room.racers.map((r) => (
                     <div
                       key={r.id}
-                      className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-[#10141c] border border-white/10"
+                      className="flex items-center justify-between px-3.5 py-2.5 rounded-lg bg-[#0b1019] border border-white/10"
                     >
                       <div className="flex items-center gap-3">
                         <span

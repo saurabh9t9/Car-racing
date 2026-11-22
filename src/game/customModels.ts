@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { CAR_MODELS, DEFAULT_MODEL_ID, getCarModelSpec } from '../shared/carCatalog';
 import { isValidGlbBuffer } from '../shared/glbValidation';
-import { preloadEnvironmentTextures } from './trackBuilder';
+import { preloadEnvironmentAssets, TOTAL_ENV_PRELOAD_STEPS } from './envAssets';
 
 export type CustomAssetSlot = 'car' | 'env';
 
@@ -704,9 +704,9 @@ export async function preloadStartupAssets(
   await Promise.all([
     (async () => {
       let done = 0;
-      await preloadEnvironmentTextures(() => {
+      await preloadEnvironmentAssets(() => {
         done += 1;
-        envRatio = done / 2;
+        envRatio = Math.min(1, done / TOTAL_ENV_PRELOAD_STEPS);
         emitPercent();
       });
       envRatio = 1;

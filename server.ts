@@ -6,6 +6,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { createServer as createViteServer } from 'vite';
 import { createCommunityTrack, getTrackById, listTracks } from './server/store';
 import { compileTrack, STARTER_TRACKS } from './src/shared/trackMath';
+import { getDefaultWeatherForTheme, isTrackTheme, isWeatherPreset } from './src/shared/weather';
 import { CAR_MODELS } from './src/shared/carCatalog';
 import {
   computeBotInput,
@@ -318,7 +319,7 @@ async function bootstrap() {
     const created = createCommunityTrack({
       name: String(body.name ?? 'Custom Circuit'),
       author: String(body.author ?? 'Driver'),
-      theme: body.theme === 'sunset' || body.theme === 'midnight' ? body.theme : 'alpine',
+      theme: isTrackTheme(body.theme) ? body.theme : 'alpine',
       roadWidth: Number(body.roadWidth ?? 18),
       controlPoints: body.controlPoints,
       boostPads: Array.isArray(body.boostPads) ? body.boostPads : [0.15, 0.55],
@@ -374,6 +375,7 @@ async function bootstrap() {
           inputSequence: 0,
           inputAck: 0,
         };
+        const initialTrack = (msg.trackId && getTrackById(msg.trackId)) || STARTER_TRACKS[0];
         const room: Room = {
           code,
           hostId: playerId,
@@ -381,9 +383,12 @@ async function bootstrap() {
           countdownMs: 0,
           elapsedMs: 0,
           config: {
-            trackId: (msg.trackId && getTrackById(msg.trackId)?.id) || STARTER_TRACKS[0].id,
+            trackId: initialTrack.id,
             laps: 3,
             aiCount: 3,
+            weather: isWeatherPreset(msg.weather)
+              ? msg.weather
+              : getDefaultWeatherForTheme(initialTrack.theme),
           },
           players: new Map([[playerId, player]]),
           racers: [],
@@ -448,6 +453,9 @@ async function bootstrap() {
         broadcastRoom(room);
       } else if (msg.type === 'room:update_config' && room.hostId === playerId && room.status === 'waiting') {
         if (msg.config.trackId) room.config.trackId = msg.config.trackId;
+        if (isWeatherPreset(msg.config.weather)) {
+          room.config.weather = msg.config.weather;
+        }
         if (typeof msg.config.laps === 'number') {
           room.config.laps = Math.max(1, Math.min(5, Math.round(msg.config.laps)));
         }

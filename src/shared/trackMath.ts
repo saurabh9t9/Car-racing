@@ -89,6 +89,99 @@ export const STARTER_TRACKS: TrackDefinition[] = [
     isBuiltIn: true,
     createdAt: 1700000002000,
   },
+  {
+    id: 'pacific-coastline',
+    name: 'Pacific Coastline',
+    author: 'Apex Works',
+    theme: 'coastal',
+    roadWidth: 19,
+    controlPoints: [
+      { x: 0, z: -145 },
+      { x: 115, z: -135 },
+      { x: 185, z: -65 },
+      { x: 165, z: 35 },
+      { x: 95, z: 75 },
+      { x: 135, z: 155 },
+      { x: 15, z: 165 },
+      { x: -115, z: 135 },
+      { x: -175, z: 45 },
+      { x: -120, z: -45 },
+      { x: -145, z: -125 },
+    ],
+    boostPads: [0.09, 0.36, 0.61, 0.84],
+    obstacles: [
+      { id: 'pac-obs-1', t: 0.14, lateral: 4.1, kind: 'cone_cluster' },
+      { id: 'pac-obs-2', t: 0.28, lateral: -3.8, kind: 'barricade' },
+      { id: 'pac-obs-3', t: 0.48, lateral: 3.6, kind: 'tire_stack' },
+      { id: 'pac-obs-4', t: 0.69, lateral: -4.2, kind: 'barricade' },
+      { id: 'pac-obs-5', t: 0.79, lateral: 2.2, kind: 'cone_cluster' },
+      { id: 'pac-obs-6', t: 0.91, lateral: -3.5, kind: 'tire_stack' },
+    ],
+    isBuiltIn: true,
+    createdAt: 1700000003000,
+  },
+  {
+    id: 'sakura-pass',
+    name: 'Sakura Mountain Pass',
+    author: 'Apex Works',
+    theme: 'sakura',
+    roadWidth: 17,
+    controlPoints: [
+      { x: 0, z: -130 },
+      { x: 110, z: -120 },
+      { x: 155, z: -30 },
+      { x: 80, z: 15 },
+      { x: 145, z: 95 },
+      { x: 55, z: 155 },
+      { x: -20, z: 95 },
+      { x: -105, z: 140 },
+      { x: -160, z: 55 },
+      { x: -85, z: -10 },
+      { x: -145, z: -90 },
+    ],
+    boostPads: [0.11, 0.45, 0.81],
+    obstacles: [
+      { id: 'sak-obs-1', t: 0.19, lateral: -3.4, kind: 'tire_stack' },
+      { id: 'sak-obs-2', t: 0.34, lateral: 3.2, kind: 'barricade' },
+      { id: 'sak-obs-3', t: 0.56, lateral: -1.6, kind: 'cone_cluster' },
+      { id: 'sak-obs-4', t: 0.72, lateral: 3.6, kind: 'tire_stack' },
+      { id: 'sak-obs-5', t: 0.89, lateral: -3.2, kind: 'cone_cluster' },
+    ],
+    isBuiltIn: true,
+    createdAt: 1700000004000,
+  },
+  {
+    id: 'apex-endurance',
+    name: 'Apex Endurance GP',
+    author: 'Apex Works',
+    theme: 'alpine',
+    roadWidth: 21,
+    controlPoints: [
+      { x: 0, z: -155 },
+      { x: 155, z: -150 },
+      { x: 195, z: -55 },
+      { x: 120, z: 0 },
+      { x: 185, z: 95 },
+      { x: 95, z: 165 },
+      { x: -15, z: 130 },
+      { x: -125, z: 155 },
+      { x: -185, z: 60 },
+      { x: -135, z: -25 },
+      { x: -175, z: -115 },
+      { x: -90, z: -155 },
+    ],
+    boostPads: [0.06, 0.31, 0.58, 0.85],
+    obstacles: [
+      { id: 'gp-obs-1', t: 0.15, lateral: 4.8, kind: 'barricade' },
+      { id: 'gp-obs-2', t: 0.25, lateral: -4.5, kind: 'cone_cluster' },
+      { id: 'gp-obs-3', t: 0.43, lateral: 4.4, kind: 'tire_stack' },
+      { id: 'gp-obs-4', t: 0.65, lateral: -4.6, kind: 'barricade' },
+      { id: 'gp-obs-5', t: 0.76, lateral: 1.5, kind: 'cone_cluster' },
+      { id: 'gp-obs-6', t: 0.91, lateral: -4.2, kind: 'tire_stack' },
+    ],
+    isBuiltIn: true,
+    createdAt: 1700000005000,
+  },
 ];
 
 /** Evaluates closed Catmull-Rom spline at local parameter u in [0, 1) between p1 and p2. */
@@ -676,5 +769,164 @@ export function generateAutoSketchLoop(
     ],
     estimatedLength: fallbackVal.estimatedLength,
     archetype: 0,
+  };
+}
+
+export interface TrackPreviewSummary {
+  svgPath: string;
+  lengthMeters: number;
+  boostCount: number;
+  obstacleCount: number;
+  cornerCount: number;
+}
+
+export interface TrackTurnSignage {
+  apexChevrons: Array<{
+    t: number;
+    side: -1 | 1;
+    x: number;
+    z: number;
+    yaw: number;
+  }>;
+  brakingBoards: Array<{
+    distanceLabel: '150' | '100' | '50';
+    side: -1 | 1;
+    x: number;
+    z: number;
+    yaw: number;
+  }>;
+}
+
+/**
+ * Identifies sharp corners along a compiled circuit to place realistic apex chevron boards
+ * and 150m / 100m / 50m braking distance markers on outer shoulders.
+ */
+export function computeTrackTurnSignage(track: CompiledTrack): TrackTurnSignage {
+  const samples = track.samples;
+  const n = samples.length;
+  const stepDist = track.totalLength / Math.max(1, n);
+  const windowStep = Math.max(2, Math.round(14 / Math.max(1, stepDist)));
+
+  const curvatures: number[] = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    const prev = samples[(i - windowStep + n) % n];
+    const next = samples[(i + windowStep) % n];
+    // Signed turn deflection using right normal · delta tangent
+    const dtx = next.tx - prev.tx;
+    const dtz = next.tz - prev.tz;
+    const curr = samples[i];
+    const signed = dtx * curr.nx + dtz * curr.nz;
+    curvatures[i] = signed;
+  }
+
+  // Pick local maxima of curvature separated by at least 10% of the lap and away from start gantry
+  const peakIndices: number[] = [];
+  const minSep = Math.max(8, Math.floor(n * 0.11));
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    if (t < 0.08 || t > 0.92) continue;
+    const mag = Math.abs(curvatures[i]);
+    if (mag < 0.42) continue;
+
+    let isLocalPeak = true;
+    for (let k = -4; k <= 4; k++) {
+      if (k !== 0 && Math.abs(curvatures[(i + k + n) % n]) > mag) {
+        isLocalPeak = false;
+        break;
+      }
+    }
+    if (!isLocalPeak) continue;
+
+    const tooClose = peakIndices.some((p) => {
+      const diff = Math.abs(p - i);
+      return Math.min(diff, n - diff) < minSep;
+    });
+    if (!tooClose) peakIndices.push(i);
+  }
+
+  const apexChevrons: TrackTurnSignage['apexChevrons'] = [];
+  const brakingBoards: TrackTurnSignage['brakingBoards'] = [];
+  const halfW = track.def.roadWidth * 0.5;
+  const outerShoulderDist = halfW + 4.95;
+
+  for (const peakIdx of peakIndices) {
+    const turningRight = curvatures[peakIdx] > 0;
+    // Outer wall of a right turn is the left shoulder (-1); outer wall of a left turn is right (+1)
+    const outerSide: -1 | 1 = turningRight ? -1 : 1;
+
+    // Place 2 sequential apex chevrons along the outer apex
+    for (const deltaIdx of [-3, 1]) {
+      const idx = (peakIdx + deltaIdx + n) % n;
+      const s = samples[idx];
+      const yaw = Math.atan2(s.tx, s.tz) + (outerSide === 1 ? Math.PI : 0);
+      apexChevrons.push({
+        t: s.t,
+        side: outerSide,
+        x: s.x + s.nx * (outerSide * outerShoulderDist),
+        z: s.z + s.nz * (outerSide * outerShoulderDist),
+        yaw,
+      });
+    }
+
+    // Place 150m, 100m, 50m braking markers ahead of strong corners
+    const distances: Array<{ meters: number; label: '150' | '100' | '50' }> = [
+      { meters: 64, label: '150' },
+      { meters: 44, label: '100' },
+      { meters: 24, label: '50' },
+    ];
+    for (const d of distances) {
+      const backIdx = (peakIdx - Math.round(d.meters / Math.max(1, stepDist)) + n) % n;
+      const bt = backIdx / n;
+      if (bt < 0.05 || bt > 0.94) continue;
+      const bs = samples[backIdx];
+      brakingBoards.push({
+        distanceLabel: d.label,
+        side: outerSide,
+        x: bs.x + bs.nx * (outerSide * (outerShoulderDist + 0.35)),
+        z: bs.z + bs.nz * (outerSide * (outerShoulderDist + 0.35)),
+        yaw: Math.atan2(bs.tx, bs.tz),
+      });
+    }
+  }
+
+  return { apexChevrons, brakingBoards };
+}
+
+export function buildTrackPreviewSummary(
+  def: TrackDefinition,
+  size = 120,
+  pad = 12,
+): TrackPreviewSummary {
+  const compiled = compileTrack(def, 120);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const s of compiled.samples) {
+    if (s.x < minX) minX = s.x;
+    if (s.x > maxX) maxX = s.x;
+    if (s.z < minZ) minZ = s.z;
+    if (s.z > maxZ) maxZ = s.z;
+  }
+  const span = Math.max(10, maxX - minX, maxZ - minZ);
+  const scale = (size - pad * 2) / span;
+  const cx = (minX + maxX) * 0.5;
+  const cz = (minZ + maxZ) * 0.5;
+  const svgPath =
+    compiled.samples
+      .map((s, idx) => {
+        const px = size * 0.5 + (s.x - cx) * scale;
+        const py = size * 0.5 + (s.z - cz) * scale;
+        return `${idx === 0 ? 'M' : 'L'}${px.toFixed(1)},${py.toFixed(1)}`;
+      })
+      .join(' ') + ' Z';
+
+  const signage = computeTrackTurnSignage(compiled);
+  return {
+    svgPath,
+    lengthMeters: Math.round(compiled.totalLength),
+    boostCount: def.boostPads.length,
+    obstacleCount: def.obstacles?.length ?? 0,
+    cornerCount: Math.max(4, Math.round(signage.apexChevrons.length / 2)),
   };
 }

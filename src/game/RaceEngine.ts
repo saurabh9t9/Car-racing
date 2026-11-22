@@ -21,7 +21,9 @@ import type {
   RoomSnapshot,
   TrackDefinition,
   VehicleConfig,
+  WeatherPreset,
 } from '../shared/types';
+import { getDefaultWeatherForTheme } from '../shared/weather';
 import { CAR_MODELS } from '../shared/carCatalog';
 import { soundEngine } from './audio';
 import {
@@ -40,6 +42,7 @@ import {
   warmUpModelTextures,
   type StartupLoadProgress,
 } from './customModels';
+import { getGaragePaddockTexture, warmUpEnvTextures } from './envAssets';
 import { buildTrackScene, type BuiltTrackScene } from './trackBuilder';
 
 export type EngineMode = 'title' | 'garage' | 'race';
@@ -77,6 +80,7 @@ interface Particle {
 }
 
 const MAX_PARTICLES = 180;
+const RAIN_DROP_COUNT = 260;
 const BOT_NAMES = ['Vortex', 'Kestrel', 'Apex-9', 'Drifter', 'Torque'];
 const BOT_FLEET_IDS = [
   'bmw_m3_gtr_e46',
@@ -109,6 +113,7 @@ export class RaceEngine {
 
   // Track & Car rigs
   private currentTrackDef: TrackDefinition = STARTER_TRACKS[0];
+  private currentWeather: WeatherPreset = getDefaultWeatherForTheme(STARTER_TRACKS[0].theme);
   private compiledTrack: CompiledTrack = compileTrack(STARTER_TRACKS[0], 240);
   private builtTrack: BuiltTrackScene | null = null;
   private carRigs = new Map<string, CarRig>();
@@ -160,10 +165,12 @@ export class RaceEngine {
   private bufferedDash: -1 | 0 | 1 = 0;
   private dashBufferTimer = 0;
 
-  // Pooled particles
+  // Pooled particles & weather rain streaks
   private particles: Particle[] = [];
   private particleIdx = 0;
   private particleMesh: THREE.InstancedMesh;
+  private rainMesh: THREE.InstancedMesh;
+  private rainOffsets = new Float32Array(RAIN_DROP_COUNT * 4);
 
   // Callbacks
   private onHudUpdate: (hud: HudTelemetry) => void;
@@ -217,7 +224,7 @@ export class RaceEngine {
       65,
       (container.clientWidth || 1280) / (container.clientHeight || 720),
       0.5,
-      900,
+      1500,
     );
 
     // Mandatory studio environment map
@@ -273,11 +280,30 @@ export class RaceEngine {
       this.particleMesh.setColorAt(i, this.particles[i].color);
     }
 
+    // Pooled InstancedMesh rain streaks (toggled cleanly by weather preset)
+    const rainGeo = new THREE.BoxGeometry(0.035, 1.05, 0.035);
+    const rainMat = new THREE.MeshBasicMaterial({
+      color: 0xcbe4ff,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false,
+    });
+    this.rainMesh = new THREE.InstancedMesh(rainGeo, rainMat, RAIN_DROP_COUNT);
+    this.rainMesh.frustumCulled = false;
+    this.rainMesh.visible = false;
+    this.scene.add(this.rainMesh);
+    for (let i = 0; i < RAIN_DROP_COUNT; i++) {
+      this.rainOffsets[i * 4] = (Math.random() - 0.5) * 56;
+      this.rainOffsets[i * 4 + 1] = Math.random() * 24;
+      this.rainOffsets[i * 4 + 2] = (Math.random() - 0.5) * 56;
+      this.rainOffsets[i * 4 + 3] = 28 + Math.random() * 14;
+    }
+
     // Garage pedestal
     this.initGarageStage();
 
     // Load initial track & title demo cars
-    this.loadTrack(STARTER_TRACKS[0]);
+    this.loadTrack(STARTER_TRACKS[0], this.currentWeather);
     this.enterTitleMode(DEFAULT_CAR_CONFIG);
 
     // Bind window/canvas events
@@ -312,8 +338,9 @@ export class RaceEngine {
       (proto) => warmUpModelTextures(proto, this.renderer),
     );
     if (this.disposed) return;
+    warmUpEnvTextures(this.renderer);
     if (this.mode === 'title') {
-      this.loadTrack(this.currentTrackDef);
+      this.loadTrack(this.currentTrackDef, this.currentWeather);
       this.enterTitleMode(playerCar);
     }
     // Silently warm-cache the rest of the 15-car Garage fleet in the background
@@ -324,34 +351,6 @@ export class RaceEngine {
       () => this.disposed,
       (proto) => warmUpModelTextures(proto, this.renderer),
     );
-  }
-
-  private createGarageFloorTexture(): THREE.CanvasTexture {
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
-    const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = '#181c24';
-    ctx.fillRect(0, 0, 512, 512);
-
-    // Subtle concrete asphalt speckle & expansion seams
-    for (let i = 0; i < 4200; i++) {
-      const x = Math.random() * 512;
-      const y = Math.random() * 512;
-      const v = 18 + Math.floor(Math.random() * 24);
-      ctx.fillStyle = `rgb(${v},${v + 2},${v + 6})`;
-      ctx.fillRect(x, y, 2, 2);
-    }
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, 510, 510);
-
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.repeat.set(14, 14);
-    return tex;
   }
 
   private createGarageHalftoneBackdrop(driverName: string): THREE.CanvasTexture {
@@ -451,14 +450,14 @@ export class RaceEngine {
     this.garageGroup.visible = false;
     this.scene.add(this.garageGroup);
 
-    const floorTex = this.createGarageFloorTexture();
+    const floorTex = getGaragePaddockTexture(this.renderer.capabilities.getMaxAnisotropy());
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(54, 54),
       new THREE.MeshStandardMaterial({
         map: floorTex,
-        color: 0x0d1016,
-        metalness: 0.36,
-        roughness: 0.42,
+        color: 0x3b4454,
+        metalness: 0.28,
+        roughness: 0.52,
       }),
     );
     floor.rotation.x = -Math.PI * 0.5;
@@ -489,10 +488,48 @@ export class RaceEngine {
     );
     this.garageBackdropMesh.position.set(-0.35, 1.95, -5.8);
     this.garageGroup.add(this.garageBackdropMesh);
+
+    // Overhead white studio LED light tubes & matte dark ceiling frame beams
+    const ledGeo = new THREE.BoxGeometry(5.6, 0.065, 0.11);
+    const ledMat = new THREE.MeshBasicMaterial({ color: 0xeaf2ff });
+    const housingGeo = new THREE.BoxGeometry(5.8, 0.095, 0.17);
+    const housingMat = new THREE.MeshStandardMaterial({
+      color: 0x161b24,
+      roughness: 0.7,
+      metalness: 0.4,
+    });
+    const ledConfigs: Array<{ pos: [number, number, number]; rotY: number }> = [
+      { pos: [-2.8, 3.25, -4.6], rotY: 0.24 },
+      { pos: [2.8, 3.25, -4.6], rotY: -0.24 },
+      { pos: [0, 3.55, -2.4], rotY: 0 },
+    ];
+    for (const cfg of ledConfigs) {
+      const housing = new THREE.Mesh(housingGeo, housingMat);
+      housing.position.set(cfg.pos[0], cfg.pos[1] + 0.08, cfg.pos[2]);
+      housing.rotation.y = cfg.rotY;
+      this.garageGroup.add(housing);
+
+      const tube = new THREE.Mesh(ledGeo, ledMat);
+      tube.position.set(cfg.pos[0], cfg.pos[1], cfg.pos[2]);
+      tube.rotation.y = cfg.rotY;
+      this.garageGroup.add(tube);
+    }
   }
 
-  public loadTrack(trackDef: TrackDefinition): void {
+  public setWeather(weather: WeatherPreset): void {
+    if (this.currentWeather === weather && this.builtTrack) return;
+    this.currentWeather = weather;
+    this.loadTrack(this.currentTrackDef, weather);
+    if (this.mode === 'garage' && this.builtTrack) {
+      this.builtTrack.group.visible = false;
+      this.rainMesh.visible = false;
+      this.enterGarageStageLighting();
+    }
+  }
+
+  public loadTrack(trackDef: TrackDefinition, weather?: WeatherPreset): void {
     this.currentTrackDef = trackDef;
+    if (weather) this.currentWeather = weather;
     this.compiledTrack = compileTrack(trackDef, 240);
 
     if (this.builtTrack) {
@@ -502,17 +539,26 @@ export class RaceEngine {
     }
 
     const maxAniso = this.renderer.capabilities.getMaxAnisotropy();
-    this.builtTrack = buildTrackScene(this.compiledTrack, maxAniso);
+    this.builtTrack = buildTrackScene(this.compiledTrack, maxAniso, this.currentWeather);
     this.scene.add(this.builtTrack.group);
 
     const pal = this.builtTrack.palette;
     this.scene.background = new THREE.Color(pal.skyColor);
-    this.scene.fog = new THREE.Fog(pal.fogColor, 110, 420);
+    this.scene.fog = new THREE.Fog(pal.fogColor, pal.fogNear, pal.fogFar);
     this.hemiLight.color.setHex(pal.ambientSky);
     this.hemiLight.groundColor.setHex(pal.ambientGround);
+    this.hemiLight.intensity = pal.hemiIntensity;
     this.keyLight.color.setHex(pal.sunColor);
-    this.keyLight.position.set(60, 95, 45);
+    this.keyLight.intensity = pal.sunIntensity;
+    this.renderer.toneMappingExposure = pal.toneMappingExposure;
+    const [sx, sy, sz] = pal.sunDirection;
+    this.keyLight.position.set(sx * 120, Math.max(25, sy * 140), sz * 120);
     this.keyLight.target.position.set(0, 0, 0);
+    this.rainMesh.visible = pal.hasRain && this.mode !== 'garage';
+    soundEngine.setWeatherAmbience(
+      this.currentWeather,
+      this.mode !== 'garage' && !this.paused && !this.disposed,
+    );
   }
 
   private clearRaceCars(): void {
@@ -587,7 +633,9 @@ export class RaceEngine {
     this.isOnline = false;
     this.garageGroup.visible = false;
     if (this.builtTrack) this.builtTrack.group.visible = true;
+    this.rainMesh.visible = Boolean(this.builtTrack?.palette.hasRain);
     soundEngine.stopEngine();
+    soundEngine.setWeatherAmbience(this.currentWeather, true);
 
     this.clearRaceCars();
     this.localId = 'demo-0';
@@ -608,10 +656,28 @@ export class RaceEngine {
     const s0 = sampleTrackAt(this.compiledTrack, 0);
     this.camPos.set(s0.x - 24, 15, s0.z - 28);
     this.camLook.set(s0.x, 1.5, s0.z);
+    this.camera.position.copy(this.camPos);
+    this.camera.lookAt(this.camLook);
+    this.camFov = 65;
     if (this.camera.fov !== 65) {
       this.camera.fov = 65;
       this.camera.updateProjectionMatrix();
     }
+    this.syncVisualCarRigs(0.016);
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  private enterGarageStageLighting(): void {
+    this.scene.background = new THREE.Color(0x0c0f15);
+    this.scene.fog = new THREE.Fog(0x0c0f15, 9, 23);
+    this.hemiLight.color.setHex(0xdce8ff);
+    this.hemiLight.groundColor.setHex(0x12161e);
+    this.hemiLight.intensity = 0.85;
+    this.keyLight.color.setHex(0xfff7eb);
+    this.keyLight.intensity = 1.85;
+    this.renderer.toneMappingExposure = 1.08;
+    this.keyLight.position.set(12, 18, 16);
+    this.keyLight.target.position.set(0, 0.5, 0);
   }
 
   public enterGarageMode(car: VehicleConfig, driverName?: string): void {
@@ -619,6 +685,7 @@ export class RaceEngine {
     this.paused = false;
     this.isOnline = false;
     soundEngine.stopEngine();
+    soundEngine.stopWeatherAmbience();
 
     if (driverName !== undefined) {
       this.setGarageDriverName(driverName);
@@ -626,14 +693,9 @@ export class RaceEngine {
 
     this.clearRaceCars();
     if (this.builtTrack) this.builtTrack.group.visible = false;
+    this.rainMesh.visible = false;
     this.garageGroup.visible = true;
-    this.scene.background = new THREE.Color(0x0c0f15);
-    this.scene.fog = new THREE.Fog(0x0c0f15, 9, 23);
-    this.hemiLight.color.setHex(0xdce8ff);
-    this.hemiLight.groundColor.setHex(0x12161e);
-    this.keyLight.color.setHex(0xfff7eb);
-    this.keyLight.position.set(12, 18, 16);
-    this.keyLight.target.position.set(0, 0.5, 0);
+    this.enterGarageStageLighting();
 
     this.garageAngle = -Math.PI * 0.5 + 0.10;
     this.updateGarageCar(car, true);
@@ -776,6 +838,7 @@ export class RaceEngine {
     trackDef: TrackDefinition,
     laps = 3,
     aiCount = 5,
+    weather?: WeatherPreset,
   ): void {
     this.mode = 'race';
     this.paused = false;
@@ -786,7 +849,7 @@ export class RaceEngine {
     this.onlineVisualCorrection = { x: 0, z: 0, heading: 0 };
     this.totalLaps = laps;
     this.garageGroup.visible = false;
-    this.loadTrack(trackDef);
+    this.loadTrack(trackDef, weather);
     if (this.builtTrack) this.builtTrack.group.visible = true;
 
     this.clearRaceCars();
@@ -824,10 +887,16 @@ export class RaceEngine {
     this.trauma = 0;
     this.recentRamBanner = null;
     this.snapCameraBehindLocal();
+    this.renderer.render(this.scene, this.camera);
     soundEngine.startEngine();
   }
 
-  public startOnlineRace(snapshot: RoomSnapshot, playerId: string, trackDef: TrackDefinition): void {
+  public startOnlineRace(
+    snapshot: RoomSnapshot,
+    playerId: string,
+    trackDef: TrackDefinition,
+    weather?: WeatherPreset,
+  ): void {
     this.mode = 'race';
     this.paused = false;
     this.isOnline = true;
@@ -837,7 +906,7 @@ export class RaceEngine {
     this.onlineVisualCorrection = { x: 0, z: 0, heading: 0 };
     this.totalLaps = snapshot.config.laps;
     this.garageGroup.visible = false;
-    this.loadTrack(trackDef);
+    this.loadTrack(trackDef, weather ?? snapshot.config.weather);
     if (this.builtTrack) this.builtTrack.group.visible = true;
 
     this.clearRaceCars();
@@ -861,6 +930,7 @@ export class RaceEngine {
     this.raceStatus = snapshot.status === 'racing' ? 'racing' : snapshot.status === 'finished' ? 'finished' : 'countdown';
     this.elapsedMs = snapshot.elapsedMs;
     this.snapCameraBehindLocal();
+    this.renderer.render(this.scene, this.camera);
     soundEngine.startEngine();
   }
 
@@ -960,8 +1030,12 @@ export class RaceEngine {
       this.keysHeld.clear();
       this.clearVirtualControls();
       soundEngine.stopEngine();
-    } else if (this.mode === 'race') {
-      soundEngine.startEngine();
+      soundEngine.stopWeatherAmbience();
+    } else {
+      if (this.mode === 'race') {
+        soundEngine.startEngine();
+      }
+      soundEngine.setWeatherAmbience(this.currentWeather, this.mode !== 'garage');
     }
   }
 
@@ -989,12 +1063,20 @@ export class RaceEngine {
   }
 
   private snapCameraBehindLocal(): void {
+    this.syncVisualCarRigs(0.016);
     const target = this.localRacers.find((r) => r.id === this.localId) ?? this.localRacers[0];
     if (!target) return;
     const fwdX = Math.sin(target.heading);
     const fwdZ = Math.cos(target.heading);
     this.camPos.set(target.x - fwdX * 11.5, 4.8, target.z - fwdZ * 11.5);
     this.camLook.set(target.x + fwdX * 6, 1.3, target.z + fwdZ * 6);
+    this.camera.position.copy(this.camPos);
+    this.camera.lookAt(this.camLook);
+    this.camFov = 64;
+    if (Math.abs(this.camera.fov - 64) > 0.05) {
+      this.camera.fov = 64;
+      this.camera.updateProjectionMatrix();
+    }
   }
 
   private handleKeyDown = (e: KeyboardEvent) => {
@@ -1270,6 +1352,10 @@ export class RaceEngine {
       this.stepRaceMode(dt, now);
     }
 
+    if (this.rainMesh.visible) {
+      this.updateRainParticles(dt);
+    }
+
     this.renderer.render(this.scene, this.camera);
 
     if (this.isSoftwareGl) {
@@ -1425,8 +1511,9 @@ export class RaceEngine {
         this.camera.updateProjectionMatrix();
       }
 
-      // Move directional light shadow frustum with local car
-      this.keyLight.position.set(local.x + 55, 85, local.z + 40);
+      // Move directional light shadow frustum with local car along biome sun direction
+      const [sx, sy, sz] = this.builtTrack?.palette.sunDirection ?? [0.52, 0.62, 0.42];
+      this.keyLight.position.set(local.x + sx * 100, Math.max(25, sy * 120), local.z + sz * 100);
       this.keyLight.target.position.set(local.x, 0, local.z);
 
       soundEngine.updateEngine(
@@ -1495,11 +1582,29 @@ export class RaceEngine {
     this.frameId = window.setTimeout(poll, 5);
   }
 
+  private updateRainParticles(dt: number): void {
+    const cx = this.camera.position.x;
+    const cz = this.camera.position.z;
+    for (let i = 0; i < RAIN_DROP_COUNT; i++) {
+      const base = i * 4;
+      let y = this.rainOffsets[base + 1] - this.rainOffsets[base + 3] * dt;
+      if (y < 0.2) y = 23 + (y % 23);
+      this.rainOffsets[base + 1] = y;
+      _dummy.position.set(cx + this.rainOffsets[base], y, cz + this.rainOffsets[base + 2]);
+      _dummy.rotation.set(0, 0, 0.11);
+      _dummy.scale.set(1, 1, 1);
+      _dummy.updateMatrix();
+      this.rainMesh.setMatrixAt(i, _dummy.matrix);
+    }
+    this.rainMesh.instanceMatrix.needsUpdate = true;
+  }
+
   public dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.frameId);
     clearTimeout(this.frameId);
     soundEngine.stopEngine();
+    soundEngine.stopWeatherAmbience();
 
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('keyup', this.handleKeyUp);
@@ -1512,9 +1617,33 @@ export class RaceEngine {
 
     this.clearRaceCars();
     if (this.garageCarRig) this.garageCarRig.dispose();
+    const disposedGeos = new Set<THREE.BufferGeometry>();
+    const disposedMats = new Set<THREE.Material>();
+    this.garageGroup.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        if (!disposedGeos.has(mesh.geometry)) {
+          disposedGeos.add(mesh.geometry);
+          mesh.geometry.dispose();
+        }
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        for (const m of mats) {
+          if (!disposedMats.has(m)) {
+            disposedMats.add(m);
+            const stdMat = m as THREE.MeshBasicMaterial;
+            if (stdMat.map && stdMat.map === (this.garageBackdropMesh?.material as THREE.MeshBasicMaterial | undefined)?.map) {
+              stdMat.map.dispose();
+            }
+            m.dispose();
+          }
+        }
+      }
+    });
     if (this.builtTrack) this.builtTrack.dispose();
     this.particleMesh.geometry.dispose();
     (this.particleMesh.material as THREE.Material).dispose();
+    this.rainMesh.geometry.dispose();
+    (this.rainMesh.material as THREE.Material).dispose();
     this.renderer.dispose();
     if (this.renderer.domElement.parentNode === this.container) {
       this.container.removeChild(this.renderer.domElement);

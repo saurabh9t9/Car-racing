@@ -21,7 +21,8 @@ export interface VehicleConfig {
   stats: VehicleStats;
 }
 
-export type TrackTheme = 'alpine' | 'sunset' | 'midnight';
+export type TrackTheme = 'alpine' | 'sunset' | 'midnight' | 'coastal' | 'sakura';
+export type WeatherPreset = 'sunny' | 'rainy' | 'night';
 
 export type ObstacleKind = 'barricade' | 'tire_stack' | 'cone_cluster';
 
@@ -126,6 +127,7 @@ export interface RoomConfig {
   trackId: string;
   laps: number;
   aiCount: number;
+  weather?: WeatherPreset;
 }
 
 export interface RoomSnapshot {
@@ -142,7 +144,7 @@ export interface RoomSnapshot {
 }
 
 export type ClientMessage =
-  | { type: 'room:create'; name: string; car: VehicleConfig; trackId?: string }
+  | { type: 'room:create'; name: string; car: VehicleConfig; trackId?: string; weather?: WeatherPreset }
   | { type: 'room:join'; code: string; name: string; car: VehicleConfig }
   | { type: 'room:leave' }
   | { type: 'room:update_car'; name: string; car: VehicleConfig }

@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildFreehandTrack,
+  buildTrackPreviewSummary,
   compileTrack,
+  computeTrackTurnSignage,
   FREEHAND_WORLD_SPAN,
   generateAutoSketchLoop,
   MIN_TRACK_LENGTH,
@@ -24,14 +26,26 @@ import {
   updateStandings,
 } from './physics';
 
-test('starter tracks compile cleanly with uniform arc-length samples', () => {
+test('starter tracks compile cleanly with uniform arc-length samples and turn signage', () => {
+  assert.equal(STARTER_TRACKS.length, 6);
+  const longTrackIds = new Set(['pacific-coastline', 'sakura-pass', 'apex-endurance']);
   for (const def of STARTER_TRACKS) {
     const compiled = compileTrack(def, 200);
     assert.equal(compiled.samples.length, 200);
-    assert.ok(compiled.totalLength > 500, `${def.name} length should exceed 500m`);
+    const minLen = longTrackIds.has(def.id) ? 1000 : 500;
+    assert.ok(compiled.totalLength > minLen, `${def.name} length should exceed ${minLen}m`);
     const p0 = compiled.samples[0];
     assert.ok(Math.abs(Math.hypot(p0.tx, p0.tz) - 1) < 1e-4);
     assert.ok(Math.abs(Math.hypot(p0.nx, p0.nz) - 1) < 1e-4);
+
+    const signage = computeTrackTurnSignage(compiled);
+    assert.ok(signage.apexChevrons.length >= 2, `${def.name} should detect apex chevrons`);
+    assert.ok(signage.brakingBoards.length >= 3, `${def.name} should place 150/100/50 braking boards`);
+
+    const summary = buildTrackPreviewSummary(def);
+    assert.ok(summary.svgPath.startsWith('M') && summary.svgPath.endsWith('Z'));
+    assert.ok(summary.lengthMeters > minLen);
+    assert.ok(summary.cornerCount >= 4);
   }
 });
 
@@ -386,5 +400,118 @@ test('hudSettings supports individual per-element positioning, scale, opacity cl
   assert.equal(normalized.brakeBtn.offsetY, -5);
   assert.equal(normalized.minimap.scale, 1);
 });
+
+test('all starter track themes and referenced environment GLB and texture assets exist cleanly', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { isValidGlbBuffer } = await import('./glbValidation');
+
+  const themes = new Set(STARTER_TRACKS.map((t) => t.theme));
+  assert.equal(themes.has('alpine'), true);
+  assert.equal(themes.has('sunset'), true);
+  assert.equal(themes.has('midnight'), true);
+  assert.equal(themes.has('coastal'), true);
+  assert.equal(themes.has('sakura'), true);
+
+  const envSrc = fs.readFileSync(path.resolve(process.cwd(), 'src/game/envAssets.ts'), 'utf8');
+  const glbMatches = [...envSrc.matchAll(/file:\s*'(\/models\/env\/[^']+\.glb)'/g)].map((m) => m[1]);
+  assert.ok(glbMatches.length >= 25, `Expected >= 25 environment GLB paths, got ${glbMatches.length}`);
+
+  for (const rel of glbMatches) {
+    const abs = path.resolve(process.cwd(), 'public', rel.replace(/^\//, ''));
+    assert.equal(fs.existsSync(abs), true, `Missing env GLB: ${rel}`);
+    const bytes = fs.readFileSync(abs);
+    const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    assert.equal(isValidGlbBuffer(buf), true, `Invalid GLB header in ${rel}`);
+  }
+
+  const colormapAbs = path.resolve(process.cwd(), 'public/models/env/Textures/colormap.png');
+  assert.equal(fs.existsSync(colormapAbs), true, 'Missing city GLB colormap.png');
+
+  const texMatches = [...envSrc.matchAll(/'(\/src\/assets\/images\/[^']+)'/g)].map((m) => m[1]);
+  assert.ok(texMatches.length >= 7, `Expected >= 7 environment textures, got ${texMatches.length}`);
+  for (const rel of texMatches) {
+    const abs = path.resolve(process.cwd(), rel.replace(/^\//, ''));
+    assert.equal(fs.existsSync(abs), true, `Missing env texture: ${rel}`);
+    assert.ok(fs.statSync(abs).size > 10_000, `Env texture looks empty: ${rel}`);
+  }
+});
+
+test('weather presets resolve distinct RaceEngine lighting, sky, road surface, and particle profiles', async () => {
+  const {
+    WEATHER_PRESETS,
+    getDefaultWeatherForTheme,
+    isTrackTheme,
+    isWeatherPreset,
+    resolveEnvironmentLighting,
+  } = await import('./weather');
+
+  assert.deepEqual(
+    WEATHER_PRESETS.map((p) => p.id),
+    ['sunny', 'rainy', 'night'],
+  );
+  assert.equal(isWeatherPreset('sunny'), true);
+  assert.equal(isWeatherPreset('rainy'), true);
+  assert.equal(isWeatherPreset('night'), true);
+  assert.equal(isWeatherPreset('blizzard'), false);
+
+  assert.equal(isTrackTheme('coastal'), true);
+  assert.equal(isTrackTheme('sakura'), true);
+  assert.equal(isTrackTheme('volcano'), false);
+
+  assert.equal(getDefaultWeatherForTheme('alpine'), 'sunny');
+  assert.equal(getDefaultWeatherForTheme('sunset'), 'sunny');
+  assert.equal(getDefaultWeatherForTheme('midnight'), 'night');
+  assert.equal(getDefaultWeatherForTheme('coastal'), 'sunny');
+  assert.equal(getDefaultWeatherForTheme('sakura'), 'sunny');
+
+  for (const theme of ['alpine', 'sunset', 'midnight', 'coastal', 'sakura'] as const) {
+    const sunny = resolveEnvironmentLighting(theme, 'sunny');
+    const rainy = resolveEnvironmentLighting(theme, 'rainy');
+    const night = resolveEnvironmentLighting(theme, 'night');
+
+    assert.equal(sunny.skyMode, 'sky');
+    assert.equal(sunny.hasRain, false);
+    assert.equal(sunny.showStars, false);
+    assert.ok(sunny.sunIntensity >= 1.9);
+    assert.ok(sunny.roadRoughness >= 0.8);
+
+    assert.equal(rainy.skyMode, 'overcast');
+    assert.equal(rainy.hasRain, true);
+    assert.equal(rainy.showStars, false);
+    assert.ok(rainy.fogFar < sunny.fogFar, 'Rainy fog should reduce visibility compared to sunny');
+    assert.ok(rainy.roadRoughness <= 0.25, 'Rainy asphalt should be wet and reflective');
+    assert.ok(rainy.roadMetalness >= 0.3);
+    assert.ok(rainy.lightPostCount >= 20);
+
+    assert.equal(night.skyMode, 'night');
+    assert.equal(night.hasRain, false);
+    assert.equal(night.showStars, true);
+    assert.ok(night.lightPostCount >= 24);
+    assert.notEqual(night.fogColor, sunny.fogColor);
+  }
+
+  const { computeNextAmbientDelayMs, resolveAmbientAudioProfile } = await import('./weather');
+  const sunnyAudio = resolveAmbientAudioProfile('sunny');
+  const rainyAudio = resolveAmbientAudioProfile('rainy');
+  const nightAudio = resolveAmbientAudioProfile('night');
+
+  assert.equal(sunnyAudio.mode, 'breeze');
+  assert.equal(sunnyAudio.eventKind, 'none');
+  assert.equal(computeNextAmbientDelayMs(sunnyAudio, 0.5), 0);
+
+  assert.equal(rainyAudio.mode, 'rain_storm');
+  assert.equal(rainyAudio.eventKind, 'thunder');
+  assert.ok(rainyAudio.bedVolume > sunnyAudio.bedVolume);
+  assert.equal(computeNextAmbientDelayMs(rainyAudio, 0), rainyAudio.eventMinIntervalMs);
+  assert.equal(computeNextAmbientDelayMs(rainyAudio, 1), rainyAudio.eventMaxIntervalMs);
+
+  assert.equal(nightAudio.mode, 'night_crickets');
+  assert.equal(nightAudio.eventKind, 'crickets');
+  assert.equal(computeNextAmbientDelayMs(nightAudio, 0), nightAudio.eventMinIntervalMs);
+  assert.equal(computeNextAmbientDelayMs(nightAudio, 1), nightAudio.eventMaxIntervalMs);
+  assert.ok(nightAudio.eventMaxIntervalMs < rainyAudio.eventMinIntervalMs);
+});
+
 
 
