@@ -930,3 +930,76 @@ export function buildTrackPreviewSummary(
     cornerCount: Math.max(4, Math.round(signage.apexChevrons.length / 2)),
   };
 }
+
+export interface TrackCardMetrics {
+  svgPath: string;
+  areaWidthMeters: number;
+  areaDepthMeters: number;
+  lengthMeters: number;
+  lapKmLabel: string;
+  roadWidth: number;
+  boostCount: number;
+  hazardCount: number;
+}
+
+/**
+ * Computes map carousel card metrics (rounded arena footprint, lap length in km,
+ * boost/hazard counts) and a clean closed SVG path fitted to a rectangular preview card.
+ */
+export function buildTrackCardMetrics(
+  def: TrackDefinition,
+  width = 360,
+  height = 175,
+  padX = 24,
+  padY = 18,
+): TrackCardMetrics {
+  const compiled = compileTrack(def, 160);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const s of compiled.samples) {
+    if (s.x < minX) minX = s.x;
+    if (s.x > maxX) maxX = s.x;
+    if (s.z < minZ) minZ = s.z;
+    if (s.z > maxZ) maxZ = s.z;
+  }
+
+  const spanX = Math.max(10, maxX - minX);
+  const spanZ = Math.max(10, maxZ - minZ);
+  const usableW = Math.max(20, width - padX * 2);
+  const usableH = Math.max(20, height - padY * 2);
+  const cx = (minX + maxX) * 0.5;
+  const cz = (minZ + maxZ) * 0.5;
+
+  // Fill the rectangular card cleanly while keeping road proportions legible
+  const scaleX = usableW / spanX;
+  const scaleZ = usableH / spanZ;
+
+  const svgPath =
+    compiled.samples
+      .map((s, idx) => {
+        const px = width * 0.5 + (s.x - cx) * scaleX;
+        const py = height * 0.5 + (s.z - cz) * scaleZ;
+        return `${idx === 0 ? 'M' : 'L'}${px.toFixed(1)},${py.toFixed(1)}`;
+      })
+      .join(' ') + ' Z';
+
+  const areaWidthMeters = Math.max(10, Math.round(spanX / 10) * 10);
+  const areaDepthMeters = Math.max(10, Math.round(spanZ / 10) * 10);
+  const lengthMeters = Math.round(compiled.totalLength);
+  const lapKmLabel = `${(compiled.totalLength / 1000).toFixed(1)} km`;
+
+  return {
+    svgPath,
+    areaWidthMeters,
+    areaDepthMeters,
+    lengthMeters,
+    lapKmLabel,
+    roadWidth: def.roadWidth,
+    boostCount: def.boostPads.length,
+    hazardCount: def.obstacles?.length ?? 0,
+  };
+}
+
+

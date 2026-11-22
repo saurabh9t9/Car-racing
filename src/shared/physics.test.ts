@@ -513,5 +513,60 @@ test('weather presets resolve distinct RaceEngine lighting, sky, road surface, a
   assert.ok(nightAudio.eventMaxIntervalMs < rainyAudio.eventMinIntervalMs);
 });
 
+test('buildTrackCardMetrics computes rounded arena area, km lap length, counts, and SVG path', async () => {
+  const { buildTrackCardMetrics } = await import('./trackMath');
+  const marina = STARTER_TRACKS.find((t) => t.id === 'midnight-marina')!;
+  const canyon = STARTER_TRACKS.find((t) => t.id === 'canyon-switchback')!;
+
+  const marinaMetrics = buildTrackCardMetrics(marina);
+  assert.ok(marinaMetrics.svgPath.startsWith('M') && marinaMetrics.svgPath.endsWith('Z'));
+  assert.equal(marinaMetrics.areaWidthMeters, 330);
+  assert.equal(marinaMetrics.areaDepthMeters, 250);
+  assert.equal(marinaMetrics.lapKmLabel, '1.0 km');
+  assert.equal(marinaMetrics.roadWidth, 20);
+  assert.equal(marinaMetrics.boostCount, 4);
+  assert.equal(marinaMetrics.hazardCount, 5);
+
+  const canyonMetrics = buildTrackCardMetrics(canyon);
+  assert.ok(canyonMetrics.svgPath.startsWith('M') && canyonMetrics.svgPath.endsWith('Z'));
+  assert.equal(canyonMetrics.areaWidthMeters, 310);
+  assert.equal(canyonMetrics.areaDepthMeters, 290);
+  assert.equal(canyonMetrics.lapKmLabel, '1.1 km');
+  assert.equal(canyonMetrics.roadWidth, 17);
+  assert.equal(canyonMetrics.boostCount, 3);
+  assert.equal(canyonMetrics.hazardCount, 5);
+});
+
+test('computeGarageCameraFraming prevents 3D car from overlapping left stats panel across viewports', async () => {
+  const { computeGarageCameraFraming } = await import('./garageCamera');
+
+  const landscapeCases: Array<{ label: string; w: number; h: number; statsRightPx: number }> = [
+    { label: 'desktop 1440x900', w: 1440, h: 900, statsRightPx: 460 },
+    { label: 'laptop 1280x720', w: 1280, h: 720, statsRightPx: 440 },
+    { label: 'tablet 1024x576', w: 1024, h: 576, statsRightPx: 410 },
+    { label: 'phone landscape 844x390', w: 844, h: 390, statsRightPx: 360 },
+    { label: 'compact landscape 740x390', w: 740, h: 390, statsRightPx: 332 },
+    { label: 'small phone landscape 667x375', w: 667, h: 375, statsRightPx: 318 },
+  ];
+
+  for (const c of landscapeCases) {
+    const frame = computeGarageCameraFraming(c.w, c.h, c.statsRightPx);
+    assert.ok(
+      frame.projectedCarLeftU > frame.statsRightFrac + 0.015,
+      `${c.label}: car left (${frame.projectedCarLeftU.toFixed(3)}) must stay right of stats (${frame.statsRightFrac.toFixed(3)})`,
+    );
+    assert.ok(
+      frame.projectedCarRightU <= 0.975,
+      `${c.label}: car right (${frame.projectedCarRightU.toFixed(3)}) must not clip right viewport edge`,
+    );
+    assert.ok(frame.shiftX < 0, `${c.label}: camera must shift left so car moves into right showcase zone`);
+  }
+
+  const portrait = computeGarageCameraFraming(390, 844);
+  assert.equal(portrait.shiftX, 0);
+  assert.ok(portrait.projectedCarLeftU >= 0.04 && portrait.projectedCarRightU <= 0.96);
+});
+
+
 
 

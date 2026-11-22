@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GarageModal } from './components/GarageModal';
 import { LoadingScreen } from './components/LoadingScreen';
 import { LobbyModal } from './components/LobbyModal';
+import { MapSelectModal } from './components/MapSelectModal';
 import { PauseModal, ResultsModal } from './components/PauseResultsModal';
 import { RaceHud, type VirtualControlKey } from './components/RaceHud';
 import { TitleOverlay } from './components/TitleOverlay';
@@ -27,7 +28,7 @@ import type {
 } from './shared/types';
 import { getDefaultWeatherForTheme, isWeatherPreset } from './shared/weather';
 
-type ActiveScreen = 'loading' | 'title' | 'garage' | 'studio' | 'lobby' | 'playing' | 'paused' | 'gameover';
+type ActiveScreen = 'loading' | 'title' | 'map' | 'garage' | 'studio' | 'lobby' | 'playing' | 'paused' | 'gameover';
 
 const CAR_STORAGE_KEY = 'slipstream_ram_car_v2';
 const NAME_STORAGE_KEY = 'slipstream_ram_name_v1';
@@ -375,6 +376,9 @@ export default function App() {
       if (screenRef.current === 'title' && (e.code === 'Enter' || e.code === 'Space')) {
         e.preventDefault();
         startSoloRace();
+      } else if (screenRef.current === 'map' && e.code === 'Escape') {
+        e.preventDefault();
+        setScreen('title');
       } else if (screenRef.current === 'playing' && (e.code === 'Escape' || e.code === 'KeyP')) {
         e.preventDefault();
         setScreen('paused');
@@ -421,7 +425,7 @@ export default function App() {
     if (!weatherLockedRef.current) {
       setWeather(nextWeather);
     }
-    if (screen === 'title') {
+    if (screen === 'title' || screen === 'map') {
       engineRef.current?.loadTrack(trk, nextWeather);
       engineRef.current?.enterTitleMode(car);
     }
@@ -468,11 +472,6 @@ export default function App() {
 
       {screen === 'title' && (
         <TitleOverlay
-          tracks={tracks}
-          selectedTrackId={selectedTrackId}
-          onSelectTrack={handleSelectTrack}
-          weather={weather}
-          onSelectWeather={handleSelectWeather}
           onQuickRace={() => startSoloRace()}
           onOpenMultiplayer={() => {
             setLobbyError(null);
@@ -481,14 +480,23 @@ export default function App() {
           onOpenGarage={() => {
             setScreen('garage');
             engineRef.current?.enterGarageMode(car, playerName);
-            window.requestAnimationFrame(() => {
-              const thumbs = engineRef.current?.generateGarageThumbnails();
-              if (thumbs) setCarThumbnails(thumbs);
-            });
+            engineRef.current?.startGarageThumbnailGeneration(car.modelId, setCarThumbnails);
           }}
+          onOpenMap={() => setScreen('map')}
           onOpenStudio={() => setScreen('studio')}
           muted={muted}
           onToggleMute={handleToggleMute}
+        />
+      )}
+
+      {screen === 'map' && (
+        <MapSelectModal
+          tracks={tracks}
+          selectedTrackId={selectedTrackId}
+          onSelectTrack={handleSelectTrack}
+          weather={weather}
+          onSelectWeather={handleSelectWeather}
+          onClose={() => setScreen('title')}
         />
       )}
 
@@ -504,9 +512,12 @@ export default function App() {
             if (room) sendWs({ type: 'room:update_car', name, car });
           }}
           onChangeCar={handleChangeCar}
+          onStatsBoundsChange={(rightPx) => {
+            engineRef.current?.setGarageStatsRightPx(rightPx);
+          }}
           onClose={() => {
+            engineRef.current?.stopGarageThumbnailGeneration();
             setScreen('title');
-            engineRef.current?.loadTrack(selectedTrack, weather);
             engineRef.current?.enterTitleMode(car);
           }}
         />

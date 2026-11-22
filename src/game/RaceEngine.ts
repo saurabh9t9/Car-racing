@@ -25,6 +25,7 @@ import type {
 } from '../shared/types';
 import { getDefaultWeatherForTheme } from '../shared/weather';
 import { CAR_MODELS } from '../shared/carCatalog';
+import { computeGarageCameraFraming } from '../shared/garageCamera';
 import { soundEngine } from './audio';
 import {
   attachGlbToCarRig,
@@ -127,7 +128,11 @@ export class RaceEngine {
   private garageAngle = -Math.PI * 0.5 + 0.10;
   private garageDragging = false;
   private garageLastX = 0;
+  private garageStatsRightPx = 0;
   private carThumbnails: Record<string, string> = {};
+  private thumbGenToken = 0;
+  private thumbGenTimer = 0;
+  private thumbGenCleanup: (() => void) | null = null;
 
   // Race state (solo or online interpolated)
   private isOnline = false;
@@ -542,6 +547,11 @@ export class RaceEngine {
     this.builtTrack = buildTrackScene(this.compiledTrack, maxAniso, this.currentWeather);
     this.scene.add(this.builtTrack.group);
 
+    this.restoreTrackLighting();
+  }
+
+  private restoreTrackLighting(): void {
+    if (!this.builtTrack) return;
     const pal = this.builtTrack.palette;
     this.scene.background = new THREE.Color(pal.skyColor);
     this.scene.fog = new THREE.Fog(pal.fogColor, pal.fogNear, pal.fogFar);
@@ -628,12 +638,15 @@ export class RaceEngine {
   }
 
   public enterTitleMode(playerCar: VehicleConfig): void {
+    this.stopGarageThumbnailGeneration();
     this.mode = 'title';
     this.paused = false;
     this.isOnline = false;
     this.garageGroup.visible = false;
-    if (this.builtTrack) this.builtTrack.group.visible = true;
-    this.rainMesh.visible = Boolean(this.builtTrack?.palette.hasRain);
+    if (this.builtTrack) {
+      this.builtTrack.group.visible = true;
+      this.restoreTrackLighting();
+    }
     soundEngine.stopEngine();
     soundEngine.setWeatherAmbience(this.currentWeather, true);
 
@@ -680,6 +693,34 @@ export class RaceEngine {
     this.keyLight.target.position.set(0, 0.5, 0);
   }
 
+  public setGarageStatsRightPx(rightPx: number): void {
+    const next = Number.isFinite(rightPx) && rightPx > 0 ? Math.round(rightPx) : 0;
+    if (next === this.garageStatsRightPx) return;
+    this.garageStatsRightPx = next;
+    if (this.mode === 'garage') {
+      this.applyGarageCameraFraming();
+    }
+  }
+
+  private applyGarageCameraFraming(): void {
+    const width = this.container.clientWidth || window.innerWidth || 1280;
+    const height = this.container.clientHeight || window.innerHeight || 720;
+    const frame = computeGarageCameraFraming(
+      width,
+      height,
+      this.garageStatsRightPx > 0 ? this.garageStatsRightPx : undefined,
+    );
+    this.camera.position.set(frame.shiftX, frame.camY, frame.distance);
+    this.camera.lookAt(frame.shiftX, frame.lookY, 0);
+    if (Math.abs(this.camera.fov - frame.fov) > 0.1) {
+      this.camera.fov = frame.fov;
+      this.camera.updateProjectionMatrix();
+    }
+    if (this.garageBackdropMesh) {
+      this.garageBackdropMesh.position.x = frame.backdropX;
+    }
+  }
+
   public enterGarageMode(car: VehicleConfig, driverName?: string): void {
     this.mode = 'garage';
     this.paused = false;
@@ -697,20 +738,54 @@ export class RaceEngine {
     this.garageGroup.visible = true;
     this.enterGarageStageLighting();
 
-    this.garageAngle = -Math.PI * 0.5 + 0.10;
+    this.garageAngle = -Math.PI * 0.5 + 0.1;
     this.updateGarageCar(car, true);
-    this.camPos.set(0, 1.05, 6.2);
-    this.camLook.set(0, 0.25, 0);
+    this.applyGarageCameraFraming();
+    this.renderer.render(this.scene, this.camera);
   }
 
-  public generateGarageThumbnails(): Record<string, string> {
-    const missing = CAR_MODELS.filter((m) => !this.carThumbnails[m.id]);
-    if (missing.length === 0) {
-      return { ...this.carThumbnails };
+  public stopGarageThumbnailGeneration(): void {
+    this.thumbGenToken += 1;
+    if (this.thumbGenTimer) {
+      window.clearTimeout(this.thumbGenTimer);
+      this.thumbGenTimer = 0;
+    }
+    if (this.thumbGenCleanup) {
+      const cleanup = this.thumbGenCleanup;
+      this.thumbGenCleanup = null;
+      cleanup();
+    }
+  }
+
+  /**
+   * Generates car preview thumbnails incrementally (1 car per time slice) so opening
+   * the Garage never blocks the main thread or freezes WebGL rendering.
+   */
+  public startGarageThumbnailGeneration(
+    activeModelId: string | undefined,
+    onUpdate: (thumbs: Record<string, string>) => void,
+  ): void {
+    this.stopGarageThumbnailGeneration();
+    const token = ++this.thumbGenToken;
+
+    if (Object.keys(this.carThumbnails).length > 0) {
+      onUpdate({ ...this.carThumbnails });
     }
 
-    const width = 260;
-    const height = 150;
+    const ordered = [...CAR_MODELS];
+    if (activeModelId) {
+      const idx = ordered.findIndex((m) => m.id === activeModelId);
+      if (idx > 0) {
+        const [active] = ordered.splice(idx, 1);
+        ordered.unshift(active);
+      }
+    }
+
+    const missing = ordered.filter((m) => !this.carThumbnails[m.id]);
+    if (missing.length === 0) return;
+
+    const width = 192;
+    const height = 110;
     const rt = new THREE.WebGLRenderTarget(width, height, {
       type: THREE.UnsignedByteType,
       depthBuffer: true,
@@ -743,14 +818,41 @@ export class RaceEngine {
     const ctx = canvas.getContext('2d');
     const imgData = ctx ? ctx.createImageData(width, height) : null;
 
-    const prevTarget = this.renderer.getRenderTarget();
-    const prevToneMapping = this.renderer.toneMapping;
-    this.renderer.toneMapping = THREE.NoToneMapping;
+    let disposedResources = false;
+    const cleanup = () => {
+      if (disposedResources) return;
+      disposedResources = true;
+      rt.dispose();
+    };
+    this.thumbGenCleanup = cleanup;
 
-    try {
-      for (const spec of missing) {
+    let cursor = 0;
+    let generatedSinceFlush = 0;
+    let totalGenerated = 0;
+    let hadUncached = false;
+
+    const step = () => {
+      this.thumbGenTimer = 0;
+      if (this.disposed || token !== this.thumbGenToken || this.mode !== 'garage') {
+        if (this.thumbGenCleanup === cleanup) this.thumbGenCleanup = null;
+        cleanup();
+        return;
+      }
+
+      // Advance past any already-generated or not-yet-downloaded models without blocking
+      let renderedOne = false;
+      while (cursor < missing.length && !renderedOne) {
+        const spec = missing[cursor++];
+        if (this.carThumbnails[spec.id]) continue;
         const proto = getCachedCarModelById(spec.id);
-        if (!proto) continue;
+        if (!proto) {
+          hadUncached = true;
+          continue;
+        }
+
+        const prevTarget = this.renderer.getRenderTarget();
+        const prevToneMapping = this.renderer.toneMapping;
+        this.renderer.toneMapping = THREE.NoToneMapping;
 
         const prevPos = proto.position.clone();
         const prevRot = proto.rotation.clone();
@@ -758,13 +860,17 @@ export class RaceEngine {
         proto.rotation.set(0, -Math.PI * 0.5 + 0.08, 0);
         thumbScene.add(proto);
 
-        this.renderer.setRenderTarget(rt);
-        this.renderer.render(thumbScene, thumbCam);
-        this.renderer.readRenderTargetPixels(rt, 0, 0, width, height, pixelBuf);
-
-        thumbScene.remove(proto);
-        proto.position.copy(prevPos);
-        proto.rotation.copy(prevRot);
+        try {
+          this.renderer.setRenderTarget(rt);
+          this.renderer.render(thumbScene, thumbCam);
+          this.renderer.readRenderTargetPixels(rt, 0, 0, width, height, pixelBuf);
+        } finally {
+          thumbScene.remove(proto);
+          proto.position.copy(prevPos);
+          proto.rotation.copy(prevRot);
+          this.renderer.setRenderTarget(prevTarget);
+          this.renderer.toneMapping = prevToneMapping;
+        }
 
         if (ctx && imgData) {
           const dst = imgData.data;
@@ -780,16 +886,39 @@ export class RaceEngine {
             }
           }
           ctx.putImageData(imgData, 0, 0);
-          this.carThumbnails[spec.id] = canvas.toDataURL('image/webp', 0.86);
+          this.carThumbnails[spec.id] = canvas.toDataURL('image/webp', 0.82);
+          generatedSinceFlush += 1;
+          totalGenerated += 1;
+        }
+        renderedOne = true;
+      }
+
+      const isDone = cursor >= missing.length;
+      if (generatedSinceFlush > 0 && (totalGenerated === 1 || generatedSinceFlush >= 2 || isDone)) {
+        generatedSinceFlush = 0;
+        onUpdate({ ...this.carThumbnails });
+      }
+
+      if (!isDone) {
+        // Yield between thumbnails so the UI and 3D turntable remain completely responsive
+        const delayMs = this.isSoftwareGl ? 32 : 16;
+        this.thumbGenTimer = window.setTimeout(step, delayMs);
+      } else {
+        if (this.thumbGenCleanup === cleanup) this.thumbGenCleanup = null;
+        cleanup();
+        // If some fleet models were still streaming in the background, retry once quietly
+        if (hadUncached && !this.disposed && token === this.thumbGenToken && this.mode === 'garage') {
+          this.thumbGenTimer = window.setTimeout(() => {
+            if (!this.disposed && token === this.thumbGenToken && this.mode === 'garage') {
+              this.startGarageThumbnailGeneration(activeModelId, onUpdate);
+            }
+          }, 1600);
         }
       }
-    } finally {
-      this.renderer.setRenderTarget(prevTarget);
-      this.renderer.toneMapping = prevToneMapping;
-      rt.dispose();
-    }
+    };
 
-    return { ...this.carThumbnails };
+    // Defer the very first thumbnail slightly so the Garage modal & 3D car paint immediately on click
+    this.thumbGenTimer = window.setTimeout(step, 40);
   }
 
   public updateGarageCar(car: VehicleConfig, forceRebuild = false): void {
@@ -840,6 +969,7 @@ export class RaceEngine {
     aiCount = 5,
     weather?: WeatherPreset,
   ): void {
+    this.stopGarageThumbnailGeneration();
     this.mode = 'race';
     this.paused = false;
     this.isOnline = false;
@@ -897,6 +1027,7 @@ export class RaceEngine {
     trackDef: TrackDefinition,
     weather?: WeatherPreset,
   ): void {
+    this.stopGarageThumbnailGeneration();
     this.mode = 'race';
     this.paused = false;
     this.isOnline = true;
@@ -1337,17 +1468,7 @@ export class RaceEngine {
       if (this.garageCarRig) {
         this.garageCarRig.root.rotation.y = this.garageAngle;
       }
-      // Side-profile showroom framing shifted right to give the unified left details column clean breathing room
-      const aspect = this.camera.aspect || 1.77;
-      const targetFov = aspect < 1.45 ? 46 : aspect > 1.95 ? 36 : 40;
-      const targetDist = aspect < 1.45 ? 7.6 : aspect > 1.95 ? 7.65 : 6.75;
-      const shiftX = aspect < 1.45 ? -0.62 : aspect > 1.95 ? -1.48 : -0.82;
-      this.camera.position.set(shiftX, 1.02, targetDist);
-      this.camera.lookAt(shiftX, 0.22, 0);
-      if (Math.abs(this.camera.fov - targetFov) > 0.1) {
-        this.camera.fov = targetFov;
-        this.camera.updateProjectionMatrix();
-      }
+      this.applyGarageCameraFraming();
     } else if (this.mode === 'race') {
       this.stepRaceMode(dt, now);
     }
@@ -1601,6 +1722,7 @@ export class RaceEngine {
 
   public dispose(): void {
     this.disposed = true;
+    this.stopGarageThumbnailGeneration();
     cancelAnimationFrame(this.frameId);
     clearTimeout(this.frameId);
     soundEngine.stopEngine();
