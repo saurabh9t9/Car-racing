@@ -237,43 +237,43 @@ export const GarageModal: React.FC<GarageModalProps> = ({
         </div>
       </div>
 
-      {/* Middle Hero Stage: Reference 2-Column Left Details (Cardless) | Open 3D Car & Driver Backdrop */}
+      {/* Middle Hero Stage: Stacked 1-Column Left Panel on Bigger Screens | Compact 2-Column on Smaller Devices */}
       <div className="flex-1 min-h-0 flex items-center justify-start py-1 sm:py-2 [@media(max-height:540px)]:py-0.5">
         <div
           ref={leftDetailsRef}
           data-testid="garage-left-details"
-          className="pointer-events-auto flex flex-col min-[560px]:flex-row min-[560px]:items-start gap-2 min-[760px]:gap-3 lg:gap-4 max-h-full overflow-y-auto no-scrollbar"
+          className="pointer-events-auto flex flex-col min-[560px]:flex-row lg:[@media(min-height:541px)]:flex-col min-[560px]:items-start lg:[@media(min-height:541px)]:items-stretch gap-2 min-[760px]:gap-3 lg:[@media(min-height:541px)]:gap-3 lg:[@media(min-height:541px)]:w-[clamp(220px,24vw,280px)] max-h-full overflow-y-auto no-scrollbar"
         >
-          {/* Column 1: Brand, Model, PR Pill, Core Spec Table */}
-          <div className="space-y-1.5 lg:space-y-2 [@media(max-height:540px)]:space-y-1 w-[132px] min-[760px]:w-[158px] lg:w-[190px] shrink-0">
-            <div className="space-y-0.5 lg:space-y-1">
+          {/* Column 1 (Top block on desktop): Brand, Model, PR Pill, Core Spec Table */}
+          <div className="space-y-1.5 lg:[@media(min-height:541px)]:space-y-2 [@media(max-height:540px)]:space-y-1 w-[132px] min-[760px]:w-[158px] lg:[@media(min-height:541px)]:w-full shrink-0">
+            <div className="space-y-0.5 lg:[@media(min-height:541px)]:space-y-1">
               <div className="text-[9px] min-[760px]:text-[10px] font-display font-bold tracking-widest uppercase text-slate-400">
                 {activeSpec.brand}
               </div>
-              <div className="font-display text-[11px] min-[760px]:text-xs lg:text-base font-bold text-white leading-tight drop-shadow">
+              <div className="font-display text-[11px] min-[760px]:text-xs lg:[@media(min-height:541px)]:text-lg font-bold text-white leading-tight drop-shadow">
                 {activeSpec.name} &apos;{shortYear}
               </div>
               <div className="pt-0.5 [@media(max-height:540px)]:pt-0">
-                <span className="inline-flex items-center px-2 lg:px-2.5 py-0.5 [@media(max-height:540px)]:py-0 rounded-full border border-white/35 bg-black/40 font-mono-num text-[9px] min-[760px]:text-[10px] lg:text-[11px] font-semibold text-white">
+                <span className="inline-flex items-center px-2 lg:[@media(min-height:541px)]:px-2.5 py-0.5 [@media(max-height:540px)]:py-0 rounded-full border border-white/35 bg-black/40 font-mono-num text-[9px] min-[760px]:text-[10px] lg:[@media(min-height:541px)]:text-[11px] font-semibold text-white">
                   PR {activeSummary.rating}.00
                 </span>
               </div>
             </div>
 
-            <dl className="pt-0.5 lg:pt-1 space-y-0.5 lg:space-y-1 text-[9px] min-[760px]:text-[10px] lg:text-xs leading-tight">
-              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:grid-cols-[68px_1fr] gap-1.5 lg:gap-2 items-baseline">
+            <dl className="pt-0.5 lg:[@media(min-height:541px)]:pt-1 space-y-0.5 lg:[@media(min-height:541px)]:space-y-1 text-[9px] min-[760px]:text-[10px] lg:[@media(min-height:541px)]:text-xs leading-tight">
+              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:[@media(min-height:541px)]:grid-cols-[80px_1fr] gap-1.5 lg:[@media(min-height:541px)]:gap-2 items-baseline">
                 <dt className="text-right text-slate-400">Class</dt>
                 <dd className="font-semibold text-white truncate">{activeSpec.category}</dd>
               </div>
-              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:grid-cols-[68px_1fr] gap-1.5 lg:gap-2 items-baseline">
+              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:[@media(min-height:541px)]:grid-cols-[80px_1fr] gap-1.5 lg:[@media(min-height:541px)]:gap-2 items-baseline">
                 <dt className="text-right text-slate-400">Drivetrain</dt>
                 <dd className="font-semibold text-white truncate">{activeSpec.drivetrain}</dd>
               </div>
-              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:grid-cols-[68px_1fr] gap-1.5 lg:gap-2 items-baseline">
+              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:[@media(min-height:541px)]:grid-cols-[80px_1fr] gap-1.5 lg:[@media(min-height:541px)]:gap-2 items-baseline">
                 <dt className="text-right text-slate-400">Max Power</dt>
                 <dd className="font-semibold text-white truncate">{activeSpec.power}</dd>
               </div>
-              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:grid-cols-[68px_1fr] gap-1.5 lg:gap-2 items-baseline">
+              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:[@media(min-height:541px)]:grid-cols-[80px_1fr] gap-1.5 lg:[@media(min-height:541px)]:gap-2 items-baseline">
                 <dt className="text-right text-slate-400">Weight</dt>
                 <dd className="font-semibold text-white truncate">
                   {activeSpec.weightKg.toLocaleString()} kg
@@ -282,10 +282,10 @@ export const GarageModal: React.FC<GarageModalProps> = ({
             </dl>
           </div>
 
-          {/* Column 2: Tier Strip, Handling Bar, Top Spd / 0-100, Tune Setup Toggle */}
-          <div className="pt-2 border-t border-white/15 min-[560px]:pt-0 min-[560px]:border-t-0 min-[560px]:border-l min-[560px]:pl-2.5 lg:pl-4 w-[166px] min-[760px]:w-[196px] lg:w-[228px] shrink-0 space-y-1.5 lg:space-y-2.5 [@media(max-height:540px)]:space-y-1.5">
+          {/* Column 2 (Bottom block on desktop): Tier Strip, Handling Bar, Top Spd / 0-100, Tune Setup Toggle */}
+          <div className="pt-2 border-t border-white/15 min-[560px]:pt-0 min-[560px]:border-t-0 min-[560px]:border-l min-[560px]:pl-2.5 lg:[@media(min-height:541px)]:pt-2.5 lg:[@media(min-height:541px)]:border-t lg:[@media(min-height:541px)]:border-l-0 lg:[@media(min-height:541px)]:pl-0 w-[166px] min-[760px]:w-[196px] lg:[@media(min-height:541px)]:w-full shrink-0 space-y-1.5 lg:[@media(min-height:541px)]:space-y-2.5 [@media(max-height:540px)]:space-y-1.5">
             {cardPage === 'specs' ? (
-              <div className="space-y-1.5 lg:space-y-2.5 [@media(max-height:540px)]:space-y-1.5">
+              <div className="space-y-1.5 lg:[@media(min-height:541px)]:space-y-2.5 [@media(max-height:540px)]:space-y-1.5">
                 {/* Performance Tier Strip */}
                 <div className="grid grid-cols-5 gap-1">
                   {TIER_ORDER.map((tier) => {
@@ -293,7 +293,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                     return (
                       <div
                         key={tier}
-                        className={`h-5 lg:h-6 flex items-center justify-center rounded-xs font-display text-[10px] lg:text-[11px] font-extrabold border transition-colors ${
+                        className={`h-5 lg:[@media(min-height:541px)]:h-6 flex items-center justify-center rounded-xs font-display text-[10px] lg:[@media(min-height:541px)]:text-[11px] font-extrabold border transition-colors ${
                           isActive
                             ? 'bg-white/15 border-white text-white shadow-sm'
                             : 'bg-black/25 border-white/15 text-slate-400'
@@ -329,15 +329,15 @@ export const GarageModal: React.FC<GarageModalProps> = ({
 
                 {/* Side-by-side Boxed Telemetry Metrics */}
                 <div className="flex items-center justify-between gap-1.5 pt-0.5">
-                  <div className="flex items-center gap-1 text-[8.5px] min-[760px]:text-[9.5px] lg:text-[10px] font-semibold uppercase tracking-wider text-slate-300 whitespace-nowrap">
+                  <div className="flex items-center gap-1 text-[8.5px] min-[760px]:text-[9.5px] lg:[@media(min-height:541px)]:text-[10px] font-semibold uppercase tracking-wider text-slate-300 whitespace-nowrap">
                     <span>Top Spd</span>
-                    <span className="min-w-[28px] lg:min-w-[36px] px-1 lg:px-1.5 py-0.5 rounded-xs bg-white text-slate-950 font-mono-num font-bold text-center text-[9.5px] lg:text-[11px] leading-none">
+                    <span className="min-w-[28px] lg:[@media(min-height:541px)]:min-w-[38px] px-1 lg:[@media(min-height:541px)]:px-1.5 py-0.5 rounded-xs bg-white text-slate-950 font-mono-num font-bold text-center text-[9.5px] lg:[@media(min-height:541px)]:text-[11px] leading-none">
                       {activeSummary.topSpeedKmh}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-[8.5px] min-[760px]:text-[9.5px] lg:text-[10px] font-semibold uppercase tracking-wider text-slate-300 whitespace-nowrap">
+                  <div className="flex items-center gap-1 text-[8.5px] min-[760px]:text-[9.5px] lg:[@media(min-height:541px)]:text-[10px] font-semibold uppercase tracking-wider text-slate-300 whitespace-nowrap">
                     <span>0–100 [s]</span>
-                    <span className="min-w-[26px] lg:min-w-[32px] px-1 lg:px-1.5 py-0.5 rounded-xs bg-white text-slate-950 font-mono-num font-bold text-center text-[9.5px] lg:text-[11px] leading-none">
+                    <span className="min-w-[26px] lg:[@media(min-height:541px)]:min-w-[34px] px-1 lg:[@media(min-height:541px)]:px-1.5 py-0.5 rounded-xs bg-white text-slate-950 font-mono-num font-bold text-center text-[9.5px] lg:[@media(min-height:541px)]:text-[11px] leading-none">
                       {activeSummary.zeroToHundredSec.toFixed(1)}
                     </span>
                   </div>

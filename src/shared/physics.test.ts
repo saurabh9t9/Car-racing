@@ -567,6 +567,27 @@ test('computeGarageCameraFraming prevents 3D car from overlapping left stats pan
   assert.ok(portrait.projectedCarLeftU >= 0.04 && portrait.projectedCarRightU <= 0.96);
 });
 
+test('stepGarageTurntable smoothly damps toward target and coasts with decaying inertia', async () => {
+  const { stepGarageTurntable } = await import('./garageCamera');
+
+  // While dragging, angle approaches targetAngle smoothly without overshooting
+  const dragged = stepGarageTurntable(
+    { angle: 0, targetAngle: 1.0, angularVel: 3.0 },
+    true,
+    0.016,
+  );
+  assert.ok(dragged.angle > 0.2 && dragged.angle < 1.0);
+  assert.equal(dragged.targetAngle, 1.0);
+
+  // After release, angularVel advances targetAngle and decays toward 0
+  let s = { angle: 1.0, targetAngle: 1.0, angularVel: 6.0 };
+  for (let i = 0; i < 60; i++) {
+    s = stepGarageTurntable(s, false, 0.016);
+  }
+  assert.ok(s.targetAngle > 1.5, 'Turntable should coast smoothly after release');
+  assert.ok(Math.abs(s.angularVel) < 0.2, 'Angular velocity should decay cleanly');
+});
+
 
 
 

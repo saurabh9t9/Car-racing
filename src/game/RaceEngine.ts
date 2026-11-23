@@ -25,7 +25,7 @@ import type {
 } from '../shared/types';
 import { getDefaultWeatherForTheme } from '../shared/weather';
 import { CAR_MODELS } from '../shared/carCatalog';
-import { computeGarageCameraFraming } from '../shared/garageCamera';
+import { computeGarageCameraFraming, stepGarageTurntable } from '../shared/garageCamera';
 import { soundEngine } from './audio';
 import {
   attachGlbToCarRig,
@@ -126,9 +126,14 @@ export class RaceEngine {
   private garageDriverText = 'APEX DRIVER';
   private garageCarRig: CarRig | null = null;
   private garageAngle = -Math.PI * 0.5 + 0.10;
+  private garageTargetAngle = -Math.PI * 0.5 + 0.10;
+  private garageAngularVel = 0;
   private garageDragging = false;
+  private garagePointerId: number | null = null;
   private garageLastX = 0;
+  private garageLastMoveTime = 0;
   private garageStatsRightPx = 0;
+  private garageLastFrameKey = '';
   private carThumbnails: Record<string, string> = {};
   private thumbGenToken = 0;
   private thumbGenTimer = 0;
@@ -222,6 +227,7 @@ export class RaceEngine {
     this.renderer.domElement.style.display = 'block';
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
+    this.renderer.domElement.style.touchAction = 'none';
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
@@ -319,6 +325,7 @@ export class RaceEngine {
     this.renderer.domElement.addEventListener('pointerdown', this.handlePointerDown);
     window.addEventListener('pointermove', this.handlePointerMove);
     window.addEventListener('pointerup', this.handlePointerUp);
+    window.addEventListener('pointercancel', this.handlePointerUp);
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize());
     this.resizeObserver.observe(container);
@@ -702,9 +709,13 @@ export class RaceEngine {
     }
   }
 
-  private applyGarageCameraFraming(): void {
+  private applyGarageCameraFraming(force = false): void {
     const width = this.container.clientWidth || window.innerWidth || 1280;
     const height = this.container.clientHeight || window.innerHeight || 720;
+    const key = `${width}x${height}:${this.garageStatsRightPx}`;
+    if (!force && key === this.garageLastFrameKey) return;
+    this.garageLastFrameKey = key;
+
     const frame = computeGarageCameraFraming(
       width,
       height,
@@ -738,9 +749,15 @@ export class RaceEngine {
     this.garageGroup.visible = true;
     this.enterGarageStageLighting();
 
-    this.garageAngle = -Math.PI * 0.5 + 0.1;
+    const startAngle = -Math.PI * 0.5 + 0.1;
+    this.garageAngle = startAngle;
+    this.garageTargetAngle = startAngle;
+    this.garageAngularVel = 0;
+    this.garageDragging = false;
+    this.garagePointerId = null;
+    this.garageLastFrameKey = '';
     this.updateGarageCar(car, true);
-    this.applyGarageCameraFraming();
+    this.applyGarageCameraFraming(true);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -836,6 +853,16 @@ export class RaceEngine {
       if (this.disposed || token !== this.thumbGenToken || this.mode !== 'garage') {
         if (this.thumbGenCleanup === cleanup) this.thumbGenCleanup = null;
         cleanup();
+        return;
+      }
+
+      // Defer GPU readPixels while the user is actively spinning or coasting the showroom car
+      if (
+        this.garageDragging ||
+        Math.abs(this.garageAngularVel) > 0.08 ||
+        Math.abs(this.garageTargetAngle - this.garageAngle) > 0.015
+      ) {
+        this.thumbGenTimer = window.setTimeout(step, 120);
         return;
       }
 
@@ -1238,6 +1265,8 @@ export class RaceEngine {
     this.keysHeld.clear();
     this.clearVirtualControls();
     this.garageDragging = false;
+    this.garagePointerId = null;
+    this.garageAngularVel = 0;
   };
 
   private handleVisibilityChange = () => {
@@ -1245,26 +1274,58 @@ export class RaceEngine {
       this.keysHeld.clear();
       this.clearVirtualControls();
       this.garageDragging = false;
+      this.garagePointerId = null;
+      this.garageAngularVel = 0;
     }
   };
 
   private handlePointerDown = (e: PointerEvent) => {
-    if (this.mode === 'garage') {
-      this.garageDragging = true;
-      this.garageLastX = e.clientX;
+    if (this.mode !== 'garage') return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    this.garageDragging = true;
+    this.garagePointerId = e.pointerId;
+    this.garageLastX = e.clientX;
+    this.garageLastMoveTime = performance.now();
+    this.garageAngularVel = 0;
+    try {
+      this.renderer.domElement.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore synthetic pointer events
     }
   };
 
   private handlePointerMove = (e: PointerEvent) => {
-    if (this.mode === 'garage' && this.garageDragging) {
-      const dx = e.clientX - this.garageLastX;
-      this.garageLastX = e.clientX;
-      this.garageAngle += dx * 0.012;
-    }
+    if (this.mode !== 'garage' || !this.garageDragging) return;
+    if (this.garagePointerId !== null && e.pointerId !== this.garagePointerId) return;
+    const dx = e.clientX - this.garageLastX;
+    if (Math.abs(dx) < 0.01) return;
+    const now = performance.now();
+    const dtMove = Math.max(0.004, (now - this.garageLastMoveTime) / 1000);
+    const deltaAngle = dx * 0.011;
+    this.garageTargetAngle += deltaAngle;
+    const instVel = Math.max(-14, Math.min(14, deltaAngle / dtMove));
+    this.garageAngularVel = this.garageAngularVel * 0.45 + instVel * 0.55;
+    this.garageLastX = e.clientX;
+    this.garageLastMoveTime = now;
   };
 
-  private handlePointerUp = () => {
+  private handlePointerUp = (e?: PointerEvent) => {
+    if (!this.garageDragging) return;
+    if (e && this.garagePointerId !== null && e.pointerId !== this.garagePointerId) return;
+    if (e) {
+      try {
+        if (this.renderer.domElement.hasPointerCapture(e.pointerId)) {
+          this.renderer.domElement.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (performance.now() - this.garageLastMoveTime > 90) {
+      this.garageAngularVel = 0;
+    }
     this.garageDragging = false;
+    this.garagePointerId = null;
   };
 
   private handleResize(): void {
@@ -1465,6 +1526,18 @@ export class RaceEngine {
       this.camera.position.copy(this.camPos);
       this.camera.lookAt(this.camLook);
     } else if (this.mode === 'garage') {
+      const nextRot = stepGarageTurntable(
+        {
+          angle: this.garageAngle,
+          targetAngle: this.garageTargetAngle,
+          angularVel: this.garageAngularVel,
+        },
+        this.garageDragging,
+        dt,
+      );
+      this.garageAngle = nextRot.angle;
+      this.garageTargetAngle = nextRot.targetAngle;
+      this.garageAngularVel = nextRot.angularVel;
       if (this.garageCarRig) {
         this.garageCarRig.root.rotation.y = this.garageAngle;
       }
@@ -1735,6 +1808,7 @@ export class RaceEngine {
     this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown);
     window.removeEventListener('pointermove', this.handlePointerMove);
     window.removeEventListener('pointerup', this.handlePointerUp);
+    window.removeEventListener('pointercancel', this.handlePointerUp);
     this.resizeObserver.disconnect();
 
     this.clearRaceCars();

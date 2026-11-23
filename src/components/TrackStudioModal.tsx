@@ -352,28 +352,38 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-30 bg-[#11151c]/95 flex items-center justify-center p-4 md:p-8">
-      <div className="w-full max-w-5xl rounded-xl bg-[#161c26] border border-white/15 p-5 md:p-6 flex flex-col lg:flex-row gap-6 max-h-[92vh] overflow-y-auto">
+    <div
+      data-testid="track-studio-modal"
+      className="fixed inset-0 z-30 bg-[#11151c]/95 flex items-stretch lg:items-center justify-center p-0 sm:p-3 lg:p-8"
+    >
+      <div className="w-full max-w-5xl rounded-none sm:rounded-xl bg-[#161c26] border-0 sm:border border-white/15 p-3 sm:p-5 md:p-6 flex flex-col lg:flex-row gap-4 lg:gap-6 h-full lg:h-auto lg:max-h-[92vh] overflow-y-auto overscroll-contain">
         {/* Left: Freehand Drawing Canvas */}
-        <div className="flex-1 flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
+        <div className="flex-1 flex flex-col gap-2.5 sm:gap-3 shrink-0">
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#10141c] border border-white/15 text-xs font-semibold text-white hover:bg-[#232b38] cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-[#10141c] border border-white/15 text-xs font-semibold text-white hover:bg-[#232b38] cursor-pointer shrink-0"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span>Back</span>
               </button>
-              <div>
-                <h2 className="font-display text-xl font-bold text-white">Freehand Track Studio</h2>
-                <p className="text-xs text-slate-400">Sketch a loop in one stroke — auto-smoothed into a 3D circuit</p>
+              <div className="min-w-0">
+                <h2 className="font-display text-base sm:text-xl font-bold text-white leading-tight">
+                  Freehand Track Studio
+                </h2>
+                <p className="text-[11px] sm:text-xs text-slate-400 leading-snug">
+                  Sketch a closed loop — scroll for circuit settings
+                </p>
               </div>
             </div>
           </div>
 
-          <div className="relative rounded-xl overflow-hidden border border-white/15 bg-[#10141c]">
+          <div
+            data-testid="track-canvas-frame"
+            className="relative mx-auto w-full aspect-[4/3] max-h-[calc(100dvh-132px)] max-w-[calc((100dvh-132px)*4/3)] [@media(max-height:460px)]:max-h-[calc(100dvh-96px)] [@media(max-height:460px)]:max-w-[calc((100dvh-96px)*4/3)] lg:max-h-none lg:max-w-none rounded-xl overflow-hidden border border-white/15 bg-[#10141c]"
+          >
             <canvas
               ref={canvasRef}
               width={640}
@@ -381,13 +391,13 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
-              className="w-full aspect-[4/3] block touch-none cursor-crosshair"
+              className="w-full h-full block touch-none cursor-crosshair"
               data-testid="track-draw-canvas"
             />
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -468,8 +478,8 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
           </div>
         </div>
 
-        {/* Right: Track Properties & Publish */}
-        <div className="w-full lg:w-72 flex flex-col justify-between gap-4 border-t lg:border-t-0 lg:border-l border-white/10 pt-4 lg:pt-0 lg:pl-6">
+        {/* Right (Below on smaller devices): Track Properties & Publish */}
+        <div className="w-full lg:w-72 shrink-0 flex flex-col justify-between gap-4 border-t lg:border-t-0 lg:border-l border-white/10 pt-4 pb-2 lg:py-0 lg:pl-6">
           <div className="space-y-4">
             <div>
               <label htmlFor="track-name-input" className="block text-xs font-medium text-slate-300 mb-1.5">

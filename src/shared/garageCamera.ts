@@ -115,3 +115,36 @@ export function computeGarageCameraFraming(
     projectedCarRightU,
   };
 }
+
+export interface GarageRotationState {
+  angle: number;
+  targetAngle: number;
+  angularVel: number;
+}
+
+/**
+ * Advances garage car turntable angle with coasting inertia on pointer release
+ * and exponential smoothing toward the target angle for jitter-free rotation.
+ */
+export function stepGarageTurntable(
+  state: GarageRotationState,
+  dragging: boolean,
+  dt: number,
+): GarageRotationState {
+  const safeDt = Math.max(0.001, Math.min(0.05, dt));
+  let targetAngle = state.targetAngle;
+  let angularVel = state.angularVel;
+
+  if (!dragging && Math.abs(angularVel) > 0.005) {
+    targetAngle += angularVel * safeDt;
+    angularVel *= Math.exp(-5.5 * safeDt);
+  } else if (!dragging) {
+    angularVel = 0;
+  }
+
+  const damp = 1 - Math.exp(-22 * safeDt);
+  const angle = state.angle + (targetAngle - state.angle) * damp;
+
+  return { angle, targetAngle, angularVel };
+}
+
