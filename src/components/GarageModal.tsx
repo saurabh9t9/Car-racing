@@ -195,32 +195,32 @@ export const GarageModal: React.FC<GarageModalProps> = ({
     >
       {/* Subtle left-edge readability scrim behind all left-side details */}
       <div
-        className="fixed inset-y-0 left-0 w-[44%] max-w-lg pointer-events-none -z-10"
+        className="fixed inset-y-0 left-0 w-[clamp(220px,36vw,420px)] max-w-lg pointer-events-none -z-10"
         style={{
           background:
-            'linear-gradient(90deg, rgba(10,13,18,0.86) 0%, rgba(10,13,18,0.48) 62%, rgba(10,13,18,0) 100%)',
+            'linear-gradient(90deg, rgba(12,9,8,0.88) 0%, rgba(12,9,8,0.52) 62%, rgba(12,9,8,0) 100%)',
         }}
       />
 
       {/* Top Header Bar */}
       <div className="flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3">
-          <h2 className="font-display text-lg sm:text-xl md:text-2xl [@media(max-height:540px)]:text-base font-bold tracking-wider uppercase text-white drop-shadow">
+          <h2 className="font-display text-lg sm:text-xl md:text-2xl [@media(max-height:540px)]:text-base font-bold tracking-wider uppercase text-stone-100 drop-shadow">
             GARAGE
           </h2>
           {modelLoading && (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-[#141820]/90 border border-white/15 text-[11px] font-medium text-white">
-              <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-[#18120f]/95 border border-orange-400/25 text-[11px] font-medium text-stone-100">
+              <Loader2 className="w-3 h-3 animate-spin text-orange-400" />
               <span>Downloading resources...</span>
             </span>
           )}
         </div>
 
         <div className="pointer-events-auto flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-1 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-0.5 rounded-sm bg-[#141820]/95 border border-white/15">
+          <div className="flex items-center gap-2 px-3 py-1 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-0.5 rounded-sm bg-[#18120f]/92 border border-orange-200/15">
             <label
               htmlFor="garage-driver-name"
-              className="text-[10px] sm:text-[11px] [@media(max-height:540px)]:text-[9px] uppercase tracking-wider font-semibold text-slate-400"
+              className="text-[10px] sm:text-[11px] [@media(max-height:540px)]:text-[9px] uppercase tracking-wider font-semibold text-stone-400"
             >
               DRIVER
             </label>
@@ -231,61 +231,56 @@ export const GarageModal: React.FC<GarageModalProps> = ({
               value={playerName}
               onChange={(e) => onChangeName(e.target.value)}
               placeholder="Apex Driver"
-              className="w-24 sm:w-36 [@media(max-height:540px)]:w-24 bg-transparent text-xs sm:text-sm [@media(max-height:540px)]:text-[11px] font-semibold text-white focus:outline-none border-b border-transparent focus:border-emerald-400"
+              className="w-24 sm:w-36 [@media(max-height:540px)]:w-24 bg-transparent text-xs sm:text-sm [@media(max-height:540px)]:text-[11px] font-semibold text-stone-100 focus:outline-none border-b border-transparent focus:border-orange-400"
             />
           </div>
         </div>
       </div>
 
-      {/* Middle Hero Stage: Stacked 1-Column Left Panel on Bigger Screens | Compact 2-Column on Smaller Devices */}
-      <div className="flex-1 min-h-0 flex items-center justify-start py-1 sm:py-2 [@media(max-height:540px)]:py-0.5">
+      {/* Middle Hero Stage: Always Vertically Stacked Car Info (Top) + Car Stats & Tune Setup (Bottom) */}
+      <div className="flex-1 min-h-0 flex items-start pt-1.5 [@media(min-aspect-ratio:105/100)]:items-center [@media(min-aspect-ratio:105/100)]:pt-0 justify-start py-1 sm:py-2 [@media(max-height:540px)]:py-0.5">
         <div
           ref={leftDetailsRef}
           data-testid="garage-left-details"
-          className="pointer-events-auto flex flex-col min-[560px]:flex-row lg:[@media(min-height:541px)]:flex-col min-[560px]:items-start lg:[@media(min-height:541px)]:items-stretch gap-2 min-[760px]:gap-3 lg:[@media(min-height:541px)]:gap-3 lg:[@media(min-height:541px)]:w-[clamp(220px,24vw,280px)] max-h-full overflow-y-auto no-scrollbar"
+          className="pointer-events-auto flex flex-col items-stretch w-[min(100%,clamp(206px,54vw,256px))] min-[560px]:[@media(min-aspect-ratio:105/100)]:w-[clamp(212px,22vw,292px)] [@media(max-height:540px)]:w-[clamp(188px,28vw,232px)] gap-[clamp(0.45rem,1.5vh,0.9rem)] [@media(max-height:540px)]:gap-1 max-h-full overflow-y-auto no-scrollbar"
         >
-          {/* Column 1 (Top block on desktop): Brand, Model, PR Pill, Core Spec Table */}
-          <div className="space-y-1.5 lg:[@media(min-height:541px)]:space-y-2 [@media(max-height:540px)]:space-y-1 w-[132px] min-[760px]:w-[158px] lg:[@media(min-height:541px)]:w-full shrink-0">
-            <div className="space-y-0.5 lg:[@media(min-height:541px)]:space-y-1">
-              <div className="text-[9px] min-[760px]:text-[10px] font-display font-bold tracking-widest uppercase text-slate-400">
+          {/* Top Block: Brand, Model, PR Pill, Core Spec Table */}
+          <div className="w-full min-w-0 space-y-[clamp(0.3rem,1vh,0.6rem)] [@media(max-height:540px)]:space-y-0.5">
+            <div className="space-y-0.5 [@media(max-height:540px)]:space-y-0">
+              <div className="text-[clamp(8.5px,0.8vw,10.5px)] [@media(max-height:540px)]:text-[8px] font-display font-bold tracking-widest uppercase text-orange-300/80">
                 {activeSpec.brand}
               </div>
-              <div className="font-display text-[11px] min-[760px]:text-xs lg:[@media(min-height:541px)]:text-lg font-bold text-white leading-tight drop-shadow">
+              <div className="font-display text-[clamp(0.85rem,1.35vw,1.15rem)] [@media(max-height:540px)]:text-[11px] font-bold text-stone-50 leading-tight drop-shadow">
                 {activeSpec.name} &apos;{shortYear}
               </div>
               <div className="pt-0.5 [@media(max-height:540px)]:pt-0">
-                <span className="inline-flex items-center px-2 lg:[@media(min-height:541px)]:px-2.5 py-0.5 [@media(max-height:540px)]:py-0 rounded-full border border-white/35 bg-black/40 font-mono-num text-[9px] min-[760px]:text-[10px] lg:[@media(min-height:541px)]:text-[11px] font-semibold text-white">
+                <span className="inline-flex items-center px-2.5 [@media(max-height:540px)]:px-1.5 py-0.5 [@media(max-height:540px)]:py-0 rounded-full border border-orange-300/35 bg-[#120d0b]/65 font-mono-num text-[clamp(9px,0.85vw,11px)] [@media(max-height:540px)]:text-[8.5px] font-semibold text-orange-100">
                   PR {activeSummary.rating}.00
                 </span>
               </div>
             </div>
 
-            <dl className="pt-0.5 lg:[@media(min-height:541px)]:pt-1 space-y-0.5 lg:[@media(min-height:541px)]:space-y-1 text-[9px] min-[760px]:text-[10px] lg:[@media(min-height:541px)]:text-xs leading-tight">
-              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:[@media(min-height:541px)]:grid-cols-[80px_1fr] gap-1.5 lg:[@media(min-height:541px)]:gap-2 items-baseline">
-                <dt className="text-right text-slate-400">Class</dt>
-                <dd className="font-semibold text-white truncate">{activeSpec.category}</dd>
-              </div>
-              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:[@media(min-height:541px)]:grid-cols-[80px_1fr] gap-1.5 lg:[@media(min-height:541px)]:gap-2 items-baseline">
-                <dt className="text-right text-slate-400">Drivetrain</dt>
-                <dd className="font-semibold text-white truncate">{activeSpec.drivetrain}</dd>
-              </div>
-              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:[@media(min-height:541px)]:grid-cols-[80px_1fr] gap-1.5 lg:[@media(min-height:541px)]:gap-2 items-baseline">
-                <dt className="text-right text-slate-400">Max Power</dt>
-                <dd className="font-semibold text-white truncate">{activeSpec.power}</dd>
-              </div>
-              <div className="grid grid-cols-[48px_1fr] min-[760px]:grid-cols-[56px_1fr] lg:[@media(min-height:541px)]:grid-cols-[80px_1fr] gap-1.5 lg:[@media(min-height:541px)]:gap-2 items-baseline">
-                <dt className="text-right text-slate-400">Weight</dt>
-                <dd className="font-semibold text-white truncate">
-                  {activeSpec.weightKg.toLocaleString()} kg
-                </dd>
-              </div>
+            <dl className="pt-0.5 [@media(max-height:540px)]:pt-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2.5 gap-y-1 [@media(max-height:540px)]:gap-x-1.5 [@media(max-height:540px)]:gap-y-0 text-[clamp(10px,0.9vw,12px)] [@media(max-height:540px)]:text-[9px] leading-tight items-baseline">
+              <dt className="text-right text-stone-400">Class</dt>
+              <dd className="font-semibold text-stone-100 truncate">{activeSpec.category}</dd>
+
+              <dt className="text-right text-stone-400">Drivetrain</dt>
+              <dd className="font-semibold text-stone-100 truncate">{activeSpec.drivetrain}</dd>
+
+              <dt className="text-right text-stone-400">Max Power</dt>
+              <dd className="font-semibold text-stone-100 truncate">{activeSpec.power}</dd>
+
+              <dt className="text-right text-stone-400">Weight</dt>
+              <dd className="font-semibold text-stone-100 truncate">
+                {activeSpec.weightKg.toLocaleString()} kg
+              </dd>
             </dl>
           </div>
 
-          {/* Column 2 (Bottom block on desktop): Tier Strip, Handling Bar, Top Spd / 0-100, Tune Setup Toggle */}
-          <div className="pt-2 border-t border-white/15 min-[560px]:pt-0 min-[560px]:border-t-0 min-[560px]:border-l min-[560px]:pl-2.5 lg:[@media(min-height:541px)]:pt-2.5 lg:[@media(min-height:541px)]:border-t lg:[@media(min-height:541px)]:border-l-0 lg:[@media(min-height:541px)]:pl-0 w-[166px] min-[760px]:w-[196px] lg:[@media(min-height:541px)]:w-full shrink-0 space-y-1.5 lg:[@media(min-height:541px)]:space-y-2.5 [@media(max-height:540px)]:space-y-1.5">
+          {/* Bottom Block: Tier Strip, Handling Bar, Top Spd / 0-100, Tune Setup Toggle */}
+          <div className="w-full min-w-0 pt-[clamp(0.45rem,1.5vh,0.85rem)] [@media(max-height:540px)]:pt-1 border-t border-orange-200/15 space-y-[clamp(0.4rem,1.2vh,0.7rem)] [@media(max-height:540px)]:space-y-1">
             {cardPage === 'specs' ? (
-              <div className="space-y-1.5 lg:[@media(min-height:541px)]:space-y-2.5 [@media(max-height:540px)]:space-y-1.5">
+              <div className="space-y-[clamp(0.4rem,1.2vh,0.7rem)] [@media(max-height:540px)]:space-y-1">
                 {/* Performance Tier Strip */}
                 <div className="grid grid-cols-5 gap-1">
                   {TIER_ORDER.map((tier) => {
@@ -293,10 +288,10 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                     return (
                       <div
                         key={tier}
-                        className={`h-5 lg:[@media(min-height:541px)]:h-6 flex items-center justify-center rounded-xs font-display text-[10px] lg:[@media(min-height:541px)]:text-[11px] font-extrabold border transition-colors ${
+                        className={`h-6 [@media(max-height:540px)]:h-4 flex items-center justify-center rounded-xs font-display text-[11px] [@media(max-height:540px)]:text-[9px] font-extrabold border transition-colors ${
                           isActive
-                            ? 'bg-white/15 border-white text-white shadow-sm'
-                            : 'bg-black/25 border-white/15 text-slate-400'
+                            ? 'bg-orange-500/20 border-orange-400 text-orange-100 shadow-[0_0_12px_rgba(249,115,22,0.22)]'
+                            : 'bg-[#120d0b]/55 border-white/12 text-stone-400'
                         }`}
                       >
                         {tier}
@@ -306,38 +301,38 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                 </div>
 
                 {/* Handling Grip <-> Drift Scale */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[9px] min-[760px]:text-[10px] font-semibold uppercase tracking-wider">
-                    <span className="text-slate-300">Handling</span>
-                    <span className="font-mono-num text-white">
+                <div className="space-y-1 [@media(max-height:540px)]:space-y-0.5">
+                  <div className="flex items-center justify-between text-[clamp(9px,0.85vw,10.5px)] [@media(max-height:540px)]:text-[8.5px] font-semibold uppercase tracking-wider">
+                    <span className="text-stone-300">Handling</span>
+                    <span className="font-mono-num text-stone-100">
                       {Math.round(activeSummary.handlingRatio * 100)}% AGILE
                     </span>
                   </div>
-                  <div className="relative h-2.5 flex items-center">
-                    <div className="w-full h-[2px] bg-white/20" />
+                  <div className="relative h-2.5 [@media(max-height:540px)]:h-2 flex items-center">
+                    <div className="w-full h-[2px] bg-white/15" />
                     <div
-                      className="h-[2px] bg-emerald-400 absolute left-0"
+                      className="h-[2px] bg-gradient-to-r from-amber-500 to-orange-400 absolute left-0"
                       style={{ width: `${10 + activeSummary.handlingRatio * 80}%` }}
                     />
-                    <div className="absolute left-1/2 -translate-x-1/2 w-[2px] h-2.5 bg-white/40" />
+                    <div className="absolute left-1/2 -translate-x-1/2 w-[2px] h-2.5 [@media(max-height:540px)]:h-2 bg-orange-200/40" />
                     <div
-                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-white shadow"
+                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-2.5 h-2.5 [@media(max-height:540px)]:w-2 [@media(max-height:540px)]:h-2 rounded-full bg-orange-100 shadow-[0_0_8px_rgba(251,146,60,0.6)]"
                       style={{ left: `${10 + activeSummary.handlingRatio * 80}%` }}
                     />
                   </div>
                 </div>
 
                 {/* Side-by-side Boxed Telemetry Metrics */}
-                <div className="flex items-center justify-between gap-1.5 pt-0.5">
-                  <div className="flex items-center gap-1 text-[8.5px] min-[760px]:text-[9.5px] lg:[@media(min-height:541px)]:text-[10px] font-semibold uppercase tracking-wider text-slate-300 whitespace-nowrap">
+                <div className="flex items-center justify-between gap-2 [@media(max-height:540px)]:gap-1 pt-0.5 [@media(max-height:540px)]:pt-0">
+                  <div className="flex items-center gap-1 text-[clamp(8.5px,0.82vw,10px)] [@media(max-height:540px)]:text-[8px] font-semibold uppercase tracking-wider text-stone-300 whitespace-nowrap">
                     <span>Top Spd</span>
-                    <span className="min-w-[28px] lg:[@media(min-height:541px)]:min-w-[38px] px-1 lg:[@media(min-height:541px)]:px-1.5 py-0.5 rounded-xs bg-white text-slate-950 font-mono-num font-bold text-center text-[9.5px] lg:[@media(min-height:541px)]:text-[11px] leading-none">
+                    <span className="min-w-[32px] [@media(max-height:540px)]:min-w-[26px] px-1.5 [@media(max-height:540px)]:px-1 py-0.5 rounded-xs bg-orange-50 text-stone-950 font-mono-num font-bold text-center text-[10.5px] [@media(max-height:540px)]:text-[9px] leading-none">
                       {activeSummary.topSpeedKmh}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 text-[8.5px] min-[760px]:text-[9.5px] lg:[@media(min-height:541px)]:text-[10px] font-semibold uppercase tracking-wider text-slate-300 whitespace-nowrap">
+                  <div className="flex items-center gap-1 text-[clamp(8.5px,0.82vw,10px)] [@media(max-height:540px)]:text-[8px] font-semibold uppercase tracking-wider text-stone-300 whitespace-nowrap">
                     <span>0–100 [s]</span>
-                    <span className="min-w-[26px] lg:[@media(min-height:541px)]:min-w-[34px] px-1 lg:[@media(min-height:541px)]:px-1.5 py-0.5 rounded-xs bg-white text-slate-950 font-mono-num font-bold text-center text-[9.5px] lg:[@media(min-height:541px)]:text-[11px] leading-none">
+                    <span className="min-w-[30px] [@media(max-height:540px)]:min-w-[24px] px-1.5 [@media(max-height:540px)]:px-1 py-0.5 rounded-xs bg-orange-50 text-stone-950 font-mono-num font-bold text-center text-[10.5px] [@media(max-height:540px)]:text-[9px] leading-none">
                       {activeSummary.zeroToHundredSec.toFixed(1)}
                     </span>
                   </div>
@@ -345,14 +340,14 @@ export const GarageModal: React.FC<GarageModalProps> = ({
               </div>
             ) : (
               <div className="space-y-2 [@media(max-height:540px)]:space-y-1">
-                <div className="flex items-center justify-between text-[10px] [@media(max-height:540px)]:text-[9px] uppercase tracking-wider">
-                  <span className="font-semibold text-slate-300">
+                <div className="flex items-center justify-between text-[10px] [@media(max-height:540px)]:text-[8.5px] uppercase tracking-wider">
+                  <span className="font-semibold text-stone-300">
                     Tuning ({remaining} pts left)
                   </span>
                   <button
                     type="button"
                     onClick={() => onChangeCar(buildModelConfig(DEFAULT_CAR_CONFIG, activeSpec))}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xs bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xs bg-white/10 hover:bg-orange-500/20 border border-white/10 text-stone-200 hover:text-white transition-colors cursor-pointer"
                   >
                     <RotateCcw className="w-3 h-3" />
                     <span>Reset</span>
@@ -365,11 +360,11 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                     return (
                       <div key={key} className="space-y-0.5 [@media(max-height:540px)]:space-y-1">
                         <div className="flex items-center justify-between text-[10px] [@media(max-height:540px)]:text-[9px] leading-none">
-                          <span className="uppercase tracking-wider text-slate-300">{label}</span>
-                          <span className="font-mono-num font-bold text-white">
+                          <span className="uppercase tracking-wider text-stone-300">{label}</span>
+                          <span className="font-mono-num font-bold text-stone-100">
                             {val}
                             {mod !== 0 && (
-                              <span className={mod > 0 ? 'text-emerald-400 ml-1' : 'text-amber-400 ml-1'}>
+                              <span className={mod > 0 ? 'text-orange-400 ml-1' : 'text-amber-300 ml-1'}>
                                 ({mod > 0 ? `+${mod}` : mod})
                               </span>
                             )}
@@ -396,25 +391,25 @@ export const GarageModal: React.FC<GarageModalProps> = ({
             <button
               type="button"
               onClick={() => setCardPage((p) => (p === 'specs' ? 'tune' : 'specs'))}
-              className="w-full flex items-center justify-between px-3 py-1.5 [@media(max-height:540px)]:px-2 [@media(max-height:540px)]:py-1 rounded-sm border border-white/15 bg-white/[0.06] hover:bg-white/[0.14] text-[10px] [@media(max-height:540px)]:text-[9px] font-display font-bold uppercase tracking-wider text-slate-100 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between px-3 py-1.5 [@media(max-height:540px)]:px-2 [@media(max-height:540px)]:py-0.5 rounded-sm border border-orange-300/20 bg-[#18120f]/80 hover:bg-[#241b16]/90 hover:border-orange-400/45 text-[10px] [@media(max-height:540px)]:text-[8.5px] font-display font-bold uppercase tracking-wider text-stone-100 transition-colors cursor-pointer"
             >
               <span className="inline-flex items-center gap-1.5">
                 {cardPage === 'specs' ? (
-                  <SlidersHorizontal className="w-3 h-3 text-emerald-400" />
+                  <SlidersHorizontal className="w-3 h-3 text-orange-400" />
                 ) : (
-                  <BarChart3 className="w-3 h-3 text-emerald-400" />
+                  <BarChart3 className="w-3 h-3 text-orange-400" />
                 )}
                 <span>{cardPage === 'specs' ? 'Tune Setup' : 'View Specs'}</span>
               </span>
               <span className="flex items-center gap-1.5">
                 <span
                   className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                    cardPage === 'specs' ? 'bg-emerald-400' : 'bg-white/30'
+                    cardPage === 'specs' ? 'bg-orange-400' : 'bg-white/25'
                   }`}
                 />
                 <span
                   className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                    cardPage === 'tune' ? 'bg-emerald-400' : 'bg-white/30'
+                    cardPage === 'tune' ? 'bg-orange-400' : 'bg-white/25'
                   }`}
                 />
               </span>
@@ -427,7 +422,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
       <div className="shrink-0 space-y-1.5 sm:space-y-2 [@media(max-height:540px)]:space-y-1">
         {/* Category Tabs + Prev/Next Controls */}
         <div className="pointer-events-auto flex items-center justify-between gap-2">
-          <div className="inline-flex items-center gap-1 p-1 [@media(max-height:540px)]:p-0.5 rounded-sm bg-[#12161f]/95 border border-white/12 overflow-x-auto no-scrollbar">
+          <div className="inline-flex items-center gap-1 p-1 [@media(max-height:540px)]:p-0.5 rounded-sm bg-[#16110e]/95 border border-orange-200/15 overflow-x-auto no-scrollbar">
             {CATEGORY_TABS.map((tab) => {
               const active = category === tab;
               return (
@@ -437,8 +432,8 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                   onClick={() => setCategory(tab)}
                   className={`px-3 sm:px-3.5 py-1 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-0.5 rounded-xs text-[10px] sm:text-xs [@media(max-height:540px)]:text-[9.5px] font-display font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0 ${
                     active
-                      ? 'bg-white text-slate-950 shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-white/10'
+                      ? 'bg-gradient-to-b from-orange-400 to-orange-500 text-stone-950 shadow-sm'
+                      : 'text-stone-300 hover:text-white hover:bg-white/10'
                   }`}
                 >
                   {tab}
@@ -452,7 +447,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
               type="button"
               aria-label="Previous car"
               onClick={() => nudgeCarousel(-1)}
-              className="w-8 h-8 [@media(max-height:540px)]:w-6 [@media(max-height:540px)]:h-6 flex items-center justify-center rounded-sm bg-[#141820]/90 hover:bg-white/15 border border-white/15 hover:border-white/35 text-slate-200 hover:text-white shadow-sm transition-all cursor-pointer active:scale-95"
+              className="w-8 h-8 [@media(max-height:540px)]:w-6 [@media(max-height:540px)]:h-6 flex items-center justify-center rounded-sm bg-[#18120f]/92 hover:bg-orange-500/20 border border-orange-200/15 hover:border-orange-400/45 text-stone-200 hover:text-white shadow-sm transition-all cursor-pointer active:scale-95"
             >
               <ChevronLeft className="w-4 h-4 [@media(max-height:540px)]:w-3.5 [@media(max-height:540px)]:h-3.5" />
             </button>
@@ -460,7 +455,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
               type="button"
               aria-label="Next car"
               onClick={() => nudgeCarousel(1)}
-              className="w-8 h-8 [@media(max-height:540px)]:w-6 [@media(max-height:540px)]:h-6 flex items-center justify-center rounded-sm bg-[#141820]/90 hover:bg-white/15 border border-white/15 hover:border-white/35 text-slate-200 hover:text-white shadow-sm transition-all cursor-pointer active:scale-95"
+              className="w-8 h-8 [@media(max-height:540px)]:w-6 [@media(max-height:540px)]:h-6 flex items-center justify-center rounded-sm bg-[#18120f]/92 hover:bg-orange-500/20 border border-orange-200/15 hover:border-orange-400/45 text-stone-200 hover:text-white shadow-sm transition-all cursor-pointer active:scale-95"
             >
               <ChevronRight className="w-4 h-4 [@media(max-height:540px)]:w-3.5 [@media(max-height:540px)]:h-3.5" />
             </button>
@@ -487,10 +482,10 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                 aria-label={`Select ${m.name}`}
                 aria-pressed={selected}
                 onClick={() => selectModel(m)}
-                className={`relative w-[clamp(124px,14.5vw,196px)] h-[clamp(64px,13vh,108px)] [@media(max-height:540px)]:w-[112px] [@media(max-height:540px)]:h-[52px] shrink-0 rounded-sm overflow-hidden text-left transition-all cursor-pointer bg-[#141820] ${
+                className={`relative w-[clamp(124px,14.5vw,196px)] h-[clamp(64px,13vh,108px)] [@media(max-height:540px)]:w-[112px] [@media(max-height:540px)]:h-[52px] shrink-0 rounded-sm overflow-hidden text-left transition-all cursor-pointer bg-[#161210] ${
                   selected
-                    ? 'border-2 border-white shadow-[0_0_20px_rgba(255,255,255,0.18)]'
-                    : 'border border-white/15 hover:border-white/45 opacity-90 hover:opacity-100'
+                    ? 'border-2 border-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.28)]'
+                    : 'border border-white/15 hover:border-orange-300/45 opacity-90 hover:opacity-100'
                 }`}
               >
                 {thumb ? (
@@ -504,7 +499,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                   <div
                     className="w-full h-full flex items-center justify-center"
                     style={{
-                      background: `radial-gradient(circle at 50% 45%, ${m.primaryColor}33, #111620 75%)`,
+                      background: `radial-gradient(circle at 50% 45%, ${m.primaryColor}33, #161210 75%)`,
                     }}
                   >
                     <span
@@ -518,25 +513,25 @@ export const GarageModal: React.FC<GarageModalProps> = ({
 
                 {selected && (
                   <span
-                    className="absolute top-0 left-0 w-3 h-3 bg-emerald-400 pointer-events-none"
+                    className="absolute top-0 left-0 w-3 h-3 bg-orange-400 pointer-events-none"
                     style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}
                   />
                 )}
 
                 {/* Compact Tier Badge */}
-                <div className="absolute top-1.5 left-1.5 inline-flex items-center px-1.5 py-0.5 rounded-xs bg-black/70 border border-white/15 font-display text-[10px] font-extrabold leading-none">
+                <div className="absolute top-1.5 left-1.5 inline-flex items-center px-1.5 py-0.5 rounded-xs bg-black/75 border border-orange-200/15 font-display text-[10px] font-extrabold leading-none">
                   <span className={`px-1 py-0.5 rounded-xs leading-none ${TIER_COLORS[summary.tier]}`}>
                     {summary.tier}
                   </span>
                 </div>
 
                 {/* Bottom Label */}
-                <div className="absolute inset-x-0 bottom-0 px-2 py-1 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between gap-1">
-                  <span className="font-display text-[10px] sm:text-[11px] font-bold uppercase tracking-wide text-white truncate">
+                <div className="absolute inset-x-0 bottom-0 px-2 py-1 bg-gradient-to-t from-black/92 via-black/60 to-transparent flex items-end justify-between gap-1">
+                  <span className="font-display text-[10px] sm:text-[11px] font-bold uppercase tracking-wide text-stone-100 truncate">
                     {m.name}
                   </span>
                   {selected && (
-                    <span className="text-[9px] font-bold uppercase tracking-wider shrink-0 text-emerald-400">
+                    <span className="text-[9px] font-bold uppercase tracking-wider shrink-0 text-orange-400">
                       ACTIVE
                     </span>
                   )}
@@ -552,7 +547,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-1.5 sm:py-2 [@media(max-height:540px)]:px-3 [@media(max-height:540px)]:py-1 rounded-sm bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-display text-xs [@media(max-height:540px)]:text-[10.5px] font-extrabold uppercase tracking-wider shadow-[0_4px_16px_rgba(52,211,153,0.28)] transition-all cursor-pointer active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-1.5 sm:py-2 [@media(max-height:540px)]:px-3 [@media(max-height:540px)]:py-1 rounded-sm bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-stone-950 font-display text-xs [@media(max-height:540px)]:text-[10.5px] font-extrabold uppercase tracking-wider shadow-[0_4px_18px_rgba(249,115,22,0.34)] transition-all cursor-pointer active:scale-[0.98]"
             >
               <Check className="w-3.5 h-3.5 [@media(max-height:540px)]:w-3 [@media(max-height:540px)]:h-3 stroke-[2.75]" />
               <span>Select Ride</span>
@@ -561,7 +556,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-1 rounded-sm bg-[#161b24]/90 hover:bg-[#222936] border border-white/20 hover:border-white/40 text-xs [@media(max-height:540px)]:text-[10.5px] font-display font-bold uppercase tracking-wider text-slate-100 shadow-sm transition-all cursor-pointer active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-1 rounded-sm bg-[#18120f]/92 hover:bg-[#261d18] border border-orange-200/20 hover:border-orange-300/45 text-xs [@media(max-height:540px)]:text-[10.5px] font-display font-bold uppercase tracking-wider text-stone-100 shadow-sm transition-all cursor-pointer active:scale-[0.98]"
             >
               <ArrowLeft className="w-3.5 h-3.5 [@media(max-height:540px)]:w-3 [@media(max-height:540px)]:h-3" />
               <span>Back</span>
@@ -570,7 +565,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
 
           <div
             data-testid="garage-counter"
-            className="font-mono-num text-[11px] sm:text-xs font-semibold tracking-wider text-slate-300"
+            className="font-mono-num text-[11px] sm:text-xs font-semibold tracking-wider text-stone-300"
           >
             {selectedIndex + 1} OF {filteredModels.length}
           </div>

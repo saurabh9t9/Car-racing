@@ -14,6 +14,7 @@ export interface CarRig {
   bodyMaterials: THREE.MeshPhysicalMaterial[];
   accentMaterials: THREE.MeshStandardMaterial[];
   taillightMaterial: THREE.MeshStandardMaterial;
+  shadowDisc: THREE.Mesh;
   dispose: () => void;
 }
 
@@ -623,6 +624,7 @@ export function buildCarRig(config: VehicleConfig): CarRig {
     bodyMaterials: [bodyMat],
     accentMaterials: [accentMat],
     taillightMaterial: taillightMat,
+    shadowDisc,
     dispose,
   };
 }

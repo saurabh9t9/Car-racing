@@ -123,6 +123,9 @@ export class RaceEngine {
   // Garage Turntable state
   private garageGroup = new THREE.Group();
   private garageBackdropMesh: THREE.Mesh | null = null;
+  private garageShadowPivot = new THREE.Group();
+  private garageContactShadowMesh: THREE.Mesh | null = null;
+  private garageBgTexture: THREE.Texture | null = null;
   private garageDriverText = 'APEX DRIVER';
   private garageCarRig: CarRig | null = null;
   private garageAngle = -Math.PI * 0.5 + 0.10;
@@ -373,13 +376,8 @@ export class RaceEngine {
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, 1024, 320);
 
-    // Subtle dark studio ambient glow behind driver name lettering
-    const bgGlow = ctx.createRadialGradient(512, 165, 24, 512, 165, 430);
-    bgGlow.addColorStop(0, 'rgba(165, 180, 200, 0.14)');
-    bgGlow.addColorStop(0.55, 'rgba(72, 85, 105, 0.06)');
-    bgGlow.addColorStop(1, 'rgba(12, 15, 21, 0)');
-    ctx.fillStyle = bgGlow;
-    ctx.fillRect(0, 0, 1024, 320);
+    // Subtle dark vignette behind driver name lettering (no brightening glow)
+    ctx.clearRect(0, 0, 1024, 320);
 
     // Offscreen mask for dynamic driver name -> halftone dot grid
     const mask = document.createElement('canvas');
@@ -405,22 +403,14 @@ export class RaceEngine {
         const idx = (y * 1024 + x) * 4 + 3;
         const alpha = maskData[idx] / 255;
         if (alpha > 0.12) {
-          const r = 2.35 * (0.38 + alpha * 0.62);
+          const r = 2.45 * (0.45 + alpha * 0.55);
           const dx = (x - 512) / 512;
           const dy = (y - 165) / 160;
-          const falloff = Math.max(0.22, 1 - Math.sqrt(dx * dx + dy * dy) * 0.56);
-          ctx.fillStyle = `rgba(218, 224, 232, ${(0.56 * falloff).toFixed(3)})`;
+          const falloff = Math.max(0.42, 1 - Math.sqrt(dx * dx + dy * dy) * 0.42);
+          ctx.fillStyle = `rgba(6, 4, 3, ${(0.84 * falloff).toFixed(3)})`;
           ctx.beginPath();
           ctx.arc(x, y, r, 0, Math.PI * 2);
           ctx.fill();
-        } else {
-          const dx = Math.abs(x - 512) / 512;
-          const dy = Math.abs(y - 160) / 160;
-          const edge = Math.max(0, 1 - Math.max(dx, dy));
-          if (edge > 0.1) {
-            ctx.fillStyle = `rgba(148, 163, 184, ${(0.045 * edge).toFixed(3)})`;
-            ctx.fillRect(x - 1, y - 1, 2, 2);
-          }
         }
       }
     }
@@ -430,20 +420,109 @@ export class RaceEngine {
     return tex;
   }
 
-  private createGarageUnderglowTexture(): THREE.CanvasTexture {
+  private createGarageFloorPoolTexture(): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
-    const grad = ctx.createRadialGradient(128, 128, 16, 128, 128, 124);
-    grad.addColorStop(0, 'rgba(180, 194, 214, 0.34)');
-    grad.addColorStop(0.5, 'rgba(120, 134, 154, 0.14)');
-    grad.addColorStop(1, 'rgba(18, 22, 28, 0)');
+    const grad = ctx.createRadialGradient(128, 128, 12, 128, 128, 126);
+    grad.addColorStop(0, 'rgba(4, 2, 1, 0.62)');
+    grad.addColorStop(0.45, 'rgba(5, 3, 2, 0.36)');
+    grad.addColorStop(0.78, 'rgba(6, 3, 2, 0.12)');
+    grad.addColorStop(1, 'rgba(6, 3, 2, 0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 256, 256);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
+  }
+
+  private createGarageContactShadowTexture(): THREE.CanvasTexture {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, 512, 512);
+
+    // Wide soft ambient penumbra around the vehicle footprint
+    ctx.save();
+    ctx.translate(256, 256);
+    ctx.scale(0.88, 1.55);
+    const outerGrad = ctx.createRadialGradient(0, 0, 36, 0, 0, 162);
+    outerGrad.addColorStop(0, 'rgba(2, 1, 1, 0.90)');
+    outerGrad.addColorStop(0.5, 'rgba(4, 2, 1, 0.62)');
+    outerGrad.addColorStop(0.82, 'rgba(6, 3, 2, 0.24)');
+    outerGrad.addColorStop(1, 'rgba(6, 3, 2, 0)');
+    ctx.fillStyle = outerGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 162, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Crisp dark underbody core shadow hugging the chassis silhouette
+    ctx.save();
+    ctx.translate(256, 256);
+    ctx.scale(0.62, 1.48);
+    const coreGrad = ctx.createRadialGradient(0, 0, 22, 0, 0, 148);
+    coreGrad.addColorStop(0, 'rgba(1, 1, 1, 0.98)');
+    coreGrad.addColorStop(0.68, 'rgba(2, 1, 1, 0.82)');
+    coreGrad.addColorStop(1, 'rgba(2, 1, 1, 0)');
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, 148, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Dense tire contact pools aligned to real wheel track on the 3.5m x 6.0m shadow plane
+    const wheelOffsets: Array<[number, number]> = [
+      [130, 140],
+      [382, 140],
+      [130, 372],
+      [382, 372],
+    ];
+    for (const [wx, wy] of wheelOffsets) {
+      ctx.save();
+      ctx.translate(wx, wy);
+      ctx.scale(0.85, 1.25);
+      const wg = ctx.createRadialGradient(0, 0, 4, 0, 0, 56);
+      wg.addColorStop(0, 'rgba(0, 0, 0, 0.98)');
+      wg.addColorStop(0.45, 'rgba(2, 1, 1, 0.72)');
+      wg.addColorStop(1, 'rgba(2, 1, 1, 0)');
+      ctx.fillStyle = wg;
+      ctx.beginPath();
+      ctx.arc(0, 0, 56, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+  }
+
+  private updateGarageBgCoverTransform(width: number, height: number): void {
+    const tex = this.garageBgTexture;
+    if (!tex) return;
+    const img = tex.image as { width?: number; height?: number } | undefined;
+    const imgW = img?.width || 16;
+    const imgH = img?.height || 9;
+    const imageAspect = imgW / imgH;
+    const viewAspect = Math.max(0.25, width / Math.max(1, height));
+
+    let sx = 1;
+    let sy = 1;
+    let ox = 0;
+    let oy = 0;
+
+    if (viewAspect > imageAspect) {
+      sy = imageAspect / viewAspect;
+      oy = (1 - sy) * 0.32;
+    } else {
+      sx = viewAspect / imageAspect;
+      ox = (1 - sx) * 0.5;
+    }
+
+    tex.matrix.setUvTransform(ox, oy, sx, sy, 0, 0, 0);
   }
 
   public setGarageDriverName(name: string): void {
@@ -462,33 +541,65 @@ export class RaceEngine {
     this.garageGroup.visible = false;
     this.scene.add(this.garageGroup);
 
-    const floorTex = getGaragePaddockTexture(this.renderer.capabilities.getMaxAnisotropy());
+    const bgLoader = new THREE.TextureLoader();
+    bgLoader.load('/assets/aistudio/wmremove-transformed_ffa200f4.webp', (tex) => {
+      if (this.disposed) {
+        tex.dispose();
+        return;
+      }
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.matrixAutoUpdate = false;
+      this.garageBgTexture = tex;
+      const w = this.container.clientWidth || window.innerWidth || 1280;
+      const h = this.container.clientHeight || window.innerHeight || 720;
+      this.updateGarageBgCoverTransform(w, h);
+      if (this.mode === 'garage') {
+        this.scene.background = tex;
+        this.renderer.render(this.scene, this.camera);
+      }
+    });
+
+    // Transparent shadow-catcher floor so real vehicle shadows fall onto the warehouse floor image
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(54, 54),
-      new THREE.MeshStandardMaterial({
-        map: floorTex,
-        color: 0x3b4454,
-        metalness: 0.28,
-        roughness: 0.52,
+      new THREE.PlaneGeometry(36, 36),
+      new THREE.ShadowMaterial({
+        color: 0x040202,
+        opacity: 0.64,
       }),
     );
     floor.rotation.x = -Math.PI * 0.5;
-    floor.position.y = -0.005;
+    floor.position.y = 0;
     floor.receiveShadow = true;
     this.garageGroup.add(floor);
 
-    const underglow = new THREE.Mesh(
-      new THREE.PlaneGeometry(6.8, 3.6),
+    // Wide soft static grounding pool beneath the turntable zone to anchor weight onto wet concrete
+    const floorPool = new THREE.Mesh(
+      new THREE.PlaneGeometry(7.2, 7.2),
       new THREE.MeshBasicMaterial({
-        map: this.createGarageUnderglowTexture(),
+        map: this.createGarageFloorPoolTexture(),
         transparent: true,
-        blending: THREE.AdditiveBlending,
         depthWrite: false,
       }),
     );
-    underglow.rotation.x = -Math.PI * 0.5;
-    underglow.position.y = 0.012;
-    this.garageGroup.add(underglow);
+    floorPool.rotation.x = -Math.PI * 0.5;
+    floorPool.position.y = 0.001;
+    floorPool.renderOrder = 1;
+    this.garageGroup.add(floorPool);
+
+    // Grounded chassis & 4-wheel contact shadow locked to vehicle turntable angle
+    this.garageContactShadowMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.5, 6.0),
+      new THREE.MeshBasicMaterial({
+        map: this.createGarageContactShadowTexture(),
+        transparent: true,
+        depthWrite: false,
+      }),
+    );
+    this.garageContactShadowMesh.rotation.x = -Math.PI * 0.5;
+    this.garageContactShadowMesh.position.y = 0.003;
+    this.garageContactShadowMesh.renderOrder = 2;
+    this.garageShadowPivot.add(this.garageContactShadowMesh);
+    this.garageGroup.add(this.garageShadowPivot);
 
     this.garageBackdropMesh = new THREE.Mesh(
       new THREE.PlaneGeometry(16.5, 4.8),
@@ -501,31 +612,10 @@ export class RaceEngine {
     this.garageBackdropMesh.position.set(-0.35, 1.95, -5.8);
     this.garageGroup.add(this.garageBackdropMesh);
 
-    // Overhead white studio LED light tubes & matte dark ceiling frame beams
-    const ledGeo = new THREE.BoxGeometry(5.6, 0.065, 0.11);
-    const ledMat = new THREE.MeshBasicMaterial({ color: 0xeaf2ff });
-    const housingGeo = new THREE.BoxGeometry(5.8, 0.095, 0.17);
-    const housingMat = new THREE.MeshStandardMaterial({
-      color: 0x161b24,
-      roughness: 0.7,
-      metalness: 0.4,
-    });
-    const ledConfigs: Array<{ pos: [number, number, number]; rotY: number }> = [
-      { pos: [-2.8, 3.25, -4.6], rotY: 0.24 },
-      { pos: [2.8, 3.25, -4.6], rotY: -0.24 },
-      { pos: [0, 3.55, -2.4], rotY: 0 },
-    ];
-    for (const cfg of ledConfigs) {
-      const housing = new THREE.Mesh(housingGeo, housingMat);
-      housing.position.set(cfg.pos[0], cfg.pos[1] + 0.08, cfg.pos[2]);
-      housing.rotation.y = cfg.rotY;
-      this.garageGroup.add(housing);
-
-      const tube = new THREE.Mesh(ledGeo, ledMat);
-      tube.position.set(cfg.pos[0], cfg.pos[1], cfg.pos[2]);
-      tube.rotation.y = cfg.rotY;
-      this.garageGroup.add(tube);
-    }
+    // Warm orange rim backlight matching the glowing hangar doors behind the car
+    const rimLight = new THREE.DirectionalLight(0xff7224, 1.4);
+    rimLight.position.set(-4, 5.5, -11);
+    this.garageGroup.add(rimLight);
   }
 
   public setWeather(weather: WeatherPreset): void {
@@ -571,6 +661,12 @@ export class RaceEngine {
     const [sx, sy, sz] = pal.sunDirection;
     this.keyLight.position.set(sx * 120, Math.max(25, sy * 140), sz * 120);
     this.keyLight.target.position.set(0, 0, 0);
+    const d = 75;
+    this.keyLight.shadow.camera.left = -d;
+    this.keyLight.shadow.camera.right = d;
+    this.keyLight.shadow.camera.top = d;
+    this.keyLight.shadow.camera.bottom = -d;
+    this.keyLight.shadow.camera.updateProjectionMatrix();
     this.rainMesh.visible = pal.hasRain && this.mode !== 'garage';
     soundEngine.setWeatherAmbience(
       this.currentWeather,
@@ -688,16 +784,31 @@ export class RaceEngine {
   }
 
   private enterGarageStageLighting(): void {
-    this.scene.background = new THREE.Color(0x0c0f15);
-    this.scene.fog = new THREE.Fog(0x0c0f15, 9, 23);
-    this.hemiLight.color.setHex(0xdce8ff);
-    this.hemiLight.groundColor.setHex(0x12161e);
-    this.hemiLight.intensity = 0.85;
-    this.keyLight.color.setHex(0xfff7eb);
-    this.keyLight.intensity = 1.85;
+    const width = this.container.clientWidth || window.innerWidth || 1280;
+    const height = this.container.clientHeight || window.innerHeight || 720;
+    if (this.garageBgTexture) {
+      this.updateGarageBgCoverTransform(width, height);
+      this.scene.background = this.garageBgTexture;
+    } else {
+      this.scene.background = new THREE.Color(0x110d0b);
+    }
+    this.scene.fog = null;
+    this.hemiLight.color.setHex(0xffdfc2);
+    this.hemiLight.groundColor.setHex(0x2a1509);
+    this.hemiLight.intensity = 0.92;
+    this.keyLight.color.setHex(0xffebd6);
+    this.keyLight.intensity = 1.95;
     this.renderer.toneMappingExposure = 1.08;
-    this.keyLight.position.set(12, 18, 16);
-    this.keyLight.target.position.set(0, 0.5, 0);
+    this.keyLight.position.set(3.8, 12.5, 5.0);
+    this.keyLight.target.position.set(0, 0.3, 0);
+    this.keyLight.shadow.bias = -0.0002;
+    this.keyLight.shadow.normalBias = 0.008;
+    const gd = 6;
+    this.keyLight.shadow.camera.left = -gd;
+    this.keyLight.shadow.camera.right = gd;
+    this.keyLight.shadow.camera.top = gd;
+    this.keyLight.shadow.camera.bottom = -gd;
+    this.keyLight.shadow.camera.updateProjectionMatrix();
   }
 
   public setGarageStatsRightPx(rightPx: number): void {
@@ -712,6 +823,7 @@ export class RaceEngine {
   private applyGarageCameraFraming(force = false): void {
     const width = this.container.clientWidth || window.innerWidth || 1280;
     const height = this.container.clientHeight || window.innerHeight || 720;
+    this.updateGarageBgCoverTransform(width, height);
     const key = `${width}x${height}:${this.garageStatsRightPx}`;
     if (!force && key === this.garageLastFrameKey) return;
     this.garageLastFrameKey = key;
@@ -728,7 +840,8 @@ export class RaceEngine {
       this.camera.updateProjectionMatrix();
     }
     if (this.garageBackdropMesh) {
-      this.garageBackdropMesh.position.x = frame.backdropX;
+      this.garageBackdropMesh.position.set(frame.backdropX, frame.backdropY, -5.8);
+      this.garageBackdropMesh.scale.setScalar(frame.backdropScale);
     }
   }
 
@@ -749,13 +862,17 @@ export class RaceEngine {
     this.garageGroup.visible = true;
     this.enterGarageStageLighting();
 
-    const startAngle = -Math.PI * 0.5 + 0.1;
+    const width = this.container.clientWidth || window.innerWidth || 1280;
+    const height = this.container.clientHeight || window.innerHeight || 720;
+    const isPortrait = width / Math.max(1, height) < 1.05;
+    const startAngle = isPortrait ? -Math.PI * 0.22 : -Math.PI * 0.5 + 0.14;
     this.garageAngle = startAngle;
     this.garageTargetAngle = startAngle;
     this.garageAngularVel = 0;
     this.garageDragging = false;
     this.garagePointerId = null;
     this.garageLastFrameKey = '';
+    this.garageShadowPivot.rotation.y = startAngle;
     this.updateGarageCar(car, true);
     this.applyGarageCameraFraming(true);
     this.renderer.render(this.scene, this.camera);
@@ -809,7 +926,7 @@ export class RaceEngine {
     });
 
     const thumbScene = new THREE.Scene();
-    thumbScene.background = new THREE.Color(0x141820);
+    thumbScene.background = new THREE.Color(0x161210);
     thumbScene.environment = this.scene.environment;
 
     const hemi = new THREE.HemisphereLight(0xdbeafe, 0x1e293b, 1.25);
@@ -967,6 +1084,9 @@ export class RaceEngine {
       this.garageCarRig.dispose();
     }
     this.garageCarRig = buildCarRig(car);
+    this.garageCarRig.shadowDisc.visible = false;
+    this.garageCarRig.root.rotation.y = this.garageAngle;
+    this.garageShadowPivot.rotation.y = this.garageAngle;
     this.garageGroup.add(this.garageCarRig.root);
     this.attachCarModelAsync(this.garageCarRig, car, true);
   }
@@ -1541,6 +1661,7 @@ export class RaceEngine {
       if (this.garageCarRig) {
         this.garageCarRig.root.rotation.y = this.garageAngle;
       }
+      this.garageShadowPivot.rotation.y = this.garageAngle;
       this.applyGarageCameraFraming();
     } else if (this.mode === 'race') {
       this.stepRaceMode(dt, now);
@@ -1812,6 +1933,10 @@ export class RaceEngine {
     this.resizeObserver.disconnect();
 
     this.clearRaceCars();
+    if (this.garageBgTexture) {
+      this.garageBgTexture.dispose();
+      this.garageBgTexture = null;
+    }
     if (this.garageCarRig) this.garageCarRig.dispose();
     const disposedGeos = new Set<THREE.BufferGeometry>();
     const disposedMats = new Set<THREE.Material>();
@@ -1827,7 +1952,7 @@ export class RaceEngine {
           if (!disposedMats.has(m)) {
             disposedMats.add(m);
             const stdMat = m as THREE.MeshBasicMaterial;
-            if (stdMat.map && stdMat.map === (this.garageBackdropMesh?.material as THREE.MeshBasicMaterial | undefined)?.map) {
+            if (stdMat.map) {
               stdMat.map.dispose();
             }
             m.dispose();

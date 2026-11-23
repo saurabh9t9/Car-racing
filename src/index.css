@@ -1,6 +1,7 @@
 @import "tailwindcss" source(none);
 @source "./App.tsx";
 @source "./components";
+@custom-variant short-landscape (@media (max-height: 540px) and (min-width: 560px));
 
 @layer base {
   :root {

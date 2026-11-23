@@ -541,9 +541,11 @@ test('computeGarageCameraFraming prevents 3D car from overlapping left stats pan
   const { computeGarageCameraFraming } = await import('./garageCamera');
 
   const landscapeCases: Array<{ label: string; w: number; h: number; statsRightPx: number }> = [
-    { label: 'desktop 1440x900', w: 1440, h: 900, statsRightPx: 460 },
-    { label: 'laptop 1280x720', w: 1280, h: 720, statsRightPx: 440 },
-    { label: 'tablet 1024x576', w: 1024, h: 576, statsRightPx: 410 },
+    { label: 'desktop 1920x1080 stacked', w: 1920, h: 1080, statsRightPx: 320 },
+    { label: 'desktop 1440x900 stacked', w: 1440, h: 900, statsRightPx: 318 },
+    { label: 'laptop 1280x720 stacked', w: 1280, h: 720, statsRightPx: 304 },
+    { label: 'preview 1000x800 stacked', w: 1000, h: 800, statsRightPx: 260 },
+    { label: 'tablet 1024x576 stacked', w: 1024, h: 576, statsRightPx: 260 },
     { label: 'phone landscape 844x390', w: 844, h: 390, statsRightPx: 360 },
     { label: 'compact landscape 740x390', w: 740, h: 390, statsRightPx: 332 },
     { label: 'small phone landscape 667x375', w: 667, h: 375, statsRightPx: 318 },
@@ -560,11 +562,31 @@ test('computeGarageCameraFraming prevents 3D car from overlapping left stats pan
       `${c.label}: car right (${frame.projectedCarRightU.toFixed(3)}) must not clip right viewport edge`,
     );
     assert.ok(frame.shiftX < 0, `${c.label}: camera must shift left so car moves into right showcase zone`);
+    assert.ok(
+      frame.camY > frame.lookY && frame.lookY >= 0.45,
+      `${c.label}: camera must pitch downward onto floor (camY=${frame.camY.toFixed(2)}, lookY=${frame.lookY.toFixed(2)})`,
+    );
   }
+
+  // Stacked left panel on taller screens allows a meaningfully closer camera (~15-20% closer)
+  const stackedDesktop = computeGarageCameraFraming(1280, 720, 304);
+  const wideTwoColDesktop = computeGarageCameraFraming(1280, 720, 440);
+  assert.ok(
+    stackedDesktop.distance <= wideTwoColDesktop.distance * 0.87,
+    `Stacked panel (${stackedDesktop.distance.toFixed(2)}) should bring car noticeably closer than 2-col (${wideTwoColDesktop.distance.toFixed(2)})`,
+  );
 
   const portrait = computeGarageCameraFraming(390, 844);
   assert.equal(portrait.shiftX, 0);
   assert.ok(portrait.projectedCarLeftU >= 0.04 && portrait.projectedCarRightU <= 0.96);
+  assert.ok(
+    portrait.distance <= 13.0,
+    `Portrait car should zoom closer (distance=${portrait.distance.toFixed(2)})`,
+  );
+  assert.ok(
+    portrait.camY > portrait.lookY && portrait.lookY >= 1.2,
+    `Portrait camera must ground tires onto lower floor zone (camY=${portrait.camY.toFixed(2)}, lookY=${portrait.lookY.toFixed(2)})`,
+  );
 });
 
 test('stepGarageTurntable smoothly damps toward target and coasts with decaying inertia', async () => {
