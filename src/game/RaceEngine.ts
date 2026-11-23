@@ -425,10 +425,10 @@ export class RaceEngine {
     canvas.width = 256;
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
-    const grad = ctx.createRadialGradient(128, 128, 12, 128, 128, 126);
-    grad.addColorStop(0, 'rgba(4, 2, 1, 0.62)');
-    grad.addColorStop(0.45, 'rgba(5, 3, 2, 0.36)');
-    grad.addColorStop(0.78, 'rgba(6, 3, 2, 0.12)');
+    const grad = ctx.createRadialGradient(128, 128, 16, 128, 128, 126);
+    grad.addColorStop(0, 'rgba(3, 2, 1, 0.72)');
+    grad.addColorStop(0.42, 'rgba(4, 2, 1, 0.44)');
+    grad.addColorStop(0.76, 'rgba(6, 3, 2, 0.15)');
     grad.addColorStop(1, 'rgba(6, 3, 2, 0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 256, 256);
@@ -449,9 +449,9 @@ export class RaceEngine {
     ctx.translate(256, 256);
     ctx.scale(0.88, 1.55);
     const outerGrad = ctx.createRadialGradient(0, 0, 36, 0, 0, 162);
-    outerGrad.addColorStop(0, 'rgba(2, 1, 1, 0.90)');
-    outerGrad.addColorStop(0.5, 'rgba(4, 2, 1, 0.62)');
-    outerGrad.addColorStop(0.82, 'rgba(6, 3, 2, 0.24)');
+    outerGrad.addColorStop(0, 'rgba(2, 1, 1, 0.92)');
+    outerGrad.addColorStop(0.5, 'rgba(4, 2, 1, 0.65)');
+    outerGrad.addColorStop(0.82, 'rgba(6, 3, 2, 0.25)');
     outerGrad.addColorStop(1, 'rgba(6, 3, 2, 0)');
     ctx.fillStyle = outerGrad;
     ctx.beginPath();
@@ -462,10 +462,10 @@ export class RaceEngine {
     // Crisp dark underbody core shadow hugging the chassis silhouette
     ctx.save();
     ctx.translate(256, 256);
-    ctx.scale(0.62, 1.48);
+    ctx.scale(0.60, 1.46);
     const coreGrad = ctx.createRadialGradient(0, 0, 22, 0, 0, 148);
     coreGrad.addColorStop(0, 'rgba(1, 1, 1, 0.98)');
-    coreGrad.addColorStop(0.68, 'rgba(2, 1, 1, 0.82)');
+    coreGrad.addColorStop(0.68, 'rgba(2, 1, 1, 0.85)');
     coreGrad.addColorStop(1, 'rgba(2, 1, 1, 0)');
     ctx.fillStyle = coreGrad;
     ctx.beginPath();
@@ -473,24 +473,24 @@ export class RaceEngine {
     ctx.fill();
     ctx.restore();
 
-    // Dense tire contact pools aligned to real wheel track on the 3.5m x 6.0m shadow plane
+    // Dense tire contact pools aligned to both GT3 and open-wheel Formula wheel tracks
     const wheelOffsets: Array<[number, number]> = [
-      [130, 140],
-      [382, 140],
-      [130, 372],
-      [382, 372],
+      [126, 134],
+      [386, 134],
+      [126, 376],
+      [386, 376],
     ];
     for (const [wx, wy] of wheelOffsets) {
       ctx.save();
       ctx.translate(wx, wy);
-      ctx.scale(0.85, 1.25);
-      const wg = ctx.createRadialGradient(0, 0, 4, 0, 0, 56);
+      ctx.scale(0.92, 1.42);
+      const wg = ctx.createRadialGradient(0, 0, 6, 0, 0, 58);
       wg.addColorStop(0, 'rgba(0, 0, 0, 0.98)');
-      wg.addColorStop(0.45, 'rgba(2, 1, 1, 0.72)');
+      wg.addColorStop(0.48, 'rgba(2, 1, 1, 0.78)');
       wg.addColorStop(1, 'rgba(2, 1, 1, 0)');
       ctx.fillStyle = wg;
       ctx.beginPath();
-      ctx.arc(0, 0, 56, 0, Math.PI * 2);
+      ctx.arc(0, 0, 58, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }

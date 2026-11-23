@@ -13,7 +13,7 @@ export interface GarageCameraFraming {
 }
 
 const DEFAULT_CAR_HALF_SPAN = 2.38;
-const PORTRAIT_HERO_HALF_SPAN = 2.16;
+const PORTRAIT_HERO_HALF_SPAN = 2.26;
 const DEFAULT_CAR_HALF_DEPTH = 1.08;
 
 /**
@@ -36,10 +36,10 @@ export function computeGarageCameraFraming(
 
   if (isPortrait) {
     const halfSpan = PORTRAIT_HERO_HALF_SPAN;
-    const fov = 45;
+    const fov = 50;
     const tanHalfV = Math.tan((fov * Math.PI) / 360);
     const k = 2 * tanHalfV * aspect;
-    const targetHalfAvail = 0.452;
+    const targetHalfAvail = 0.455;
     const distance = Math.max(
       6.0,
       Math.min(16.0, (halfSpan + targetHalfAvail * k * halfDepth) / (targetHalfAvail * k)),
@@ -59,7 +59,7 @@ export function computeGarageCameraFraming(
     const backdropDist = distance + 5.8;
     const centerYAtBackdrop = camY + (lookY - camY) * (backdropDist / distance);
     const halfHAtBackdrop = backdropDist * tanHalfV;
-    const backdropY = centerYAtBackdrop + 0.04 * halfHAtBackdrop;
+    const backdropY = centerYAtBackdrop + 0.11 * halfHAtBackdrop;
     const visibleWAtBackdrop = 2 * halfHAtBackdrop * aspect;
     const backdropScale = Math.min(1.0, Math.max(0.42, (visibleWAtBackdrop * 0.92) / 14.5));
 
