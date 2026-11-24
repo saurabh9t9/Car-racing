@@ -120,19 +120,23 @@ export function computeGarageCameraFraming(
   const projectedCarLeftU = Math.min(uNearLeft, uFarLeft);
   const projectedCarRightU = Math.max(uNearRight, uFarRight);
 
-  // Pitch camera down (~11 deg) and place y=0 squarely onto the warehouse concrete floor zone
+  // Pitch camera down (~11 deg) and place y=0 squarely onto the warehouse concrete floor zone.
+  // On short phone landscape screens (height <= 540), lift groundScreenV so the car clears the bottom carousel cards.
   const isShortLandscape = height <= 540;
-  const groundScreenV = isShortLandscape ? 0.635 : 0.655;
+  const groundScreenV = isShortLandscape ? 0.545 : 0.655;
   const halfScreenH = distance * tanHalfV;
   const lookY = (groundScreenV - 0.5) * 2 * halfScreenH;
-  const camY = lookY + distance * 0.195;
+  const camY = lookY + distance * (isShortLandscape ? 0.175 : 0.195);
 
   const backdropDist = distance + 5.8;
   const centerYAtBackdrop = camY + (lookY - camY) * (backdropDist / distance);
   const halfHAtBackdrop = backdropDist * tanHalfV;
-  const backdropY = centerYAtBackdrop + 0.34 * halfHAtBackdrop;
+  const backdropY = centerYAtBackdrop + (isShortLandscape ? 0.25 : 0.34) * halfHAtBackdrop;
   const visibleWAtBackdrop = 2 * halfHAtBackdrop * aspect;
-  const backdropScale = Math.min(1.06, Math.max(0.65, (visibleWAtBackdrop * 0.88) / 16.5));
+  const backdropScale = Math.min(
+    isShortLandscape ? 0.94 : 1.06,
+    Math.max(0.62, (visibleWAtBackdrop * 0.86) / 16.5),
+  );
   const backdropX = shiftX * 0.38;
 
   return {

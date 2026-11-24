@@ -133,7 +133,7 @@ const InvertedArcSpeedometer: React.FC<{ speedKmh: number }> = ({ speedKmh }) =>
   const majorMarks = [1, 2, 3, 4, 5, 6, 7];
 
   return (
-    <div className="relative w-[224px] sm:w-[276px] h-[94px] sm:h-[116px] select-none pointer-events-none">
+    <div className="relative w-[178px] min-[480px]:w-[224px] sm:w-[276px] [@media(max-height:540px)]:w-[196px] h-[76px] min-[480px]:h-[94px] sm:h-[116px] [@media(max-height:540px)]:h-[82px] select-none pointer-events-none">
       <svg viewBox="0 0 320 132" className="w-full h-full">
         <defs>
           <radialGradient
@@ -448,41 +448,41 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-stats"
         onPointerDown={(e) => startDragWidget('stats', e)}
         style={widgetStyle('stats', 'top left')}
-        className={`fixed top-2.5 left-2.5 sm:top-4 sm:left-4 z-10 ${editFrameClass('stats', 'rounded-sm')}`}
+        className={`fixed top-[max(0.625rem,calc(var(--safe-top)+0.25rem))] left-[max(0.625rem,calc(var(--safe-left)+0.5rem))] sm:top-4 sm:left-[max(1rem,calc(var(--safe-left)+0.75rem))] z-10 ${editFrameClass('stats', 'rounded-sm')}`}
       >
         <div
-          className="flex items-center gap-3 sm:gap-4 px-3.5 sm:px-4 py-1.5 sm:py-2 pr-6 bg-[#070f1b]/75 border-t-2 border-l-2 border-[#22d3ee] shadow-[0_0_14px_rgba(34,211,238,0.22)] backdrop-blur-[2px]"
+          className="flex items-center gap-2.5 sm:gap-4 px-3 sm:px-4 py-1.5 sm:py-2 pr-5 sm:pr-6 bg-[#070f1b]/80 border-t-2 border-l-2 border-[#22d3ee] shadow-[0_0_14px_rgba(34,211,238,0.22)]"
           style={{
             clipPath: 'polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%)',
           }}
         >
-          <div className="font-display text-sm sm:text-base font-extrabold text-white tabular-nums tracking-wide">
+          <div className="font-display text-xs sm:text-base font-extrabold text-white tabular-nums tracking-wide">
             {hud.position}/{hud.totalRacers}
           </div>
 
           <div className="flex flex-col leading-none">
-            <span className="text-[9px] sm:text-[10px] font-semibold tracking-wider text-slate-300 uppercase">
+            <span className="text-[8.5px] sm:text-[10px] font-semibold tracking-wider text-slate-300 uppercase">
               LAP
             </span>
-            <span className="font-display text-xs sm:text-sm font-bold text-white tabular-nums mt-0.5">
+            <span className="font-display text-[11px] sm:text-sm font-bold text-white tabular-nums mt-0.5">
               {hud.lap}/{hud.totalLaps}
             </span>
           </div>
 
           <div className="flex flex-col leading-none">
-            <span className="text-[9px] sm:text-[10px] font-semibold tracking-wider text-slate-300 uppercase">
+            <span className="text-[8.5px] sm:text-[10px] font-semibold tracking-wider text-slate-300 uppercase">
               TIME
             </span>
-            <span className="font-mono-num text-xs sm:text-sm font-bold text-white mt-0.5">
+            <span className="font-mono-num text-[11px] sm:text-sm font-bold text-white mt-0.5">
               {formatRaceTime(hud.elapsedMs)}
             </span>
           </div>
 
           <div className="flex flex-col leading-none">
-            <span className="text-[9px] sm:text-[10px] font-semibold tracking-wider text-slate-300 uppercase">
+            <span className="text-[8.5px] sm:text-[10px] font-semibold tracking-wider text-slate-300 uppercase">
               RAMS
             </span>
-            <span className="font-mono-num text-xs sm:text-sm font-bold text-white mt-0.5">
+            <span className="font-mono-num text-[11px] sm:text-sm font-bold text-white mt-0.5">
               {hud.ramHits}
             </span>
           </div>
@@ -494,7 +494,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-speedo"
         onPointerDown={(e) => startDragWidget('speedo', e)}
         style={widgetStyle('speedo', 'top center', '-50%')}
-        className={`fixed top-0 left-1/2 z-10 ${editFrameClass('speedo', 'rounded-b-full')}`}
+        className={`fixed top-[max(0px,var(--safe-top))] [@media(max-width:520px)]:top-[max(3.2rem,calc(var(--safe-top)+2.8rem))] left-1/2 z-10 ${editFrameClass('speedo', 'rounded-b-full')}`}
       >
         <InvertedArcSpeedometer speedKmh={hud.speedKmh} />
       </div>
@@ -504,7 +504,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-settingsBtn"
         onPointerDown={(e) => startDragWidget('settingsBtn', e)}
         style={widgetStyle('settingsBtn', 'top right')}
-        className={`fixed top-3 right-[150px] sm:top-4 sm:right-[180px] z-10 ${
+        className={`fixed top-[max(0.65rem,calc(var(--safe-top)+0.25rem))] right-[calc(max(0.75rem,var(--safe-right)+0.5rem)+138px)] sm:top-4 sm:right-[calc(max(1rem,var(--safe-right)+0.75rem)+164px)] z-10 ${
           settingsOpen ? editFrameClass('settingsBtn', 'rounded-full') : 'pointer-events-auto'
         }`}
       >
@@ -518,11 +518,11 @@ export const RaceHud: React.FC<RaceHudProps> = ({
             onToggleSettings(true);
           }}
           aria-label="HUD Settings"
-          className={`flex items-center justify-center w-8 h-8 rounded-full text-white/95 hover:text-[#22d3ee] drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)] transition-colors ${
+          className={`flex items-center justify-center w-8 h-8 rounded-md bg-[#08101c]/75 border border-white/20 text-white/95 hover:text-[#22d3ee] hover:border-[#22d3ee] shadow-[0_0_8px_rgba(0,0,0,0.45)] transition-colors ${
             settingsOpen ? 'pointer-events-none' : 'cursor-pointer'
           }`}
         >
-          <Settings className="w-5 h-5" />
+          <Settings className="w-4 h-4" />
         </button>
       </div>
 
@@ -531,7 +531,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-muteBtn"
         onPointerDown={(e) => startDragWidget('muteBtn', e)}
         style={widgetStyle('muteBtn', 'top right')}
-        className={`fixed top-3 right-[112px] sm:top-4 sm:right-[138px] z-10 ${
+        className={`fixed top-[max(0.65rem,calc(var(--safe-top)+0.25rem))] right-[calc(max(0.75rem,var(--safe-right)+0.5rem)+98px)] sm:top-4 sm:right-[calc(max(1rem,var(--safe-right)+0.75rem)+122px)] z-10 ${
           settingsOpen ? editFrameClass('muteBtn', 'rounded-md') : 'pointer-events-auto'
         }`}
       >
@@ -557,7 +557,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-pauseBtn"
         onPointerDown={(e) => startDragWidget('pauseBtn', e)}
         style={widgetStyle('pauseBtn', 'top right')}
-        className={`fixed top-[50px] right-[112px] sm:top-[54px] sm:right-[138px] z-10 ${
+        className={`fixed top-[calc(max(0.65rem,var(--safe-top)+0.25rem)+38px)] right-[calc(max(0.75rem,var(--safe-right)+0.5rem)+98px)] sm:top-[54px] sm:right-[calc(max(1rem,var(--safe-right)+0.75rem)+122px)] z-10 ${
           settingsOpen ? editFrameClass('pauseBtn', 'rounded-md') : 'pointer-events-auto'
         }`}
       >
@@ -583,14 +583,14 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-minimap"
         onPointerDown={(e) => startDragWidget('minimap', e)}
         style={widgetStyle('minimap', 'top right')}
-        className={`fixed top-3 right-3 sm:top-4 sm:right-4 z-10 ${editFrameClass('minimap', 'rounded-md')}`}
+        className={`fixed top-[max(0.65rem,calc(var(--safe-top)+0.25rem))] right-[max(0.75rem,calc(var(--safe-right)+0.5rem))] sm:top-4 sm:right-[max(1rem,calc(var(--safe-right)+0.75rem))] z-10 ${editFrameClass('minimap', 'rounded-md')}`}
       >
-        <div className="p-1.5 rounded-md bg-[#070f1b]/75 border border-[#22d3ee]/60 shadow-[0_0_12px_rgba(34,211,238,0.2)] backdrop-blur-[2px]">
+        <div className="p-1.5 rounded-md bg-[#070f1b]/80 border border-[#22d3ee]/60 shadow-[0_0_12px_rgba(34,211,238,0.2)]">
           <svg
             width={minimapData.size}
             height={minimapData.size}
             viewBox={`0 0 ${minimapData.size} ${minimapData.size}`}
-            className="w-[74px] h-[58px] sm:w-[100px] sm:h-[78px]"
+            className="w-[70px] h-[56px] sm:w-[100px] sm:h-[78px]"
           >
             <path
               d={minimapData.d}
@@ -640,7 +640,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-throttleBtn"
         onPointerDown={(e) => startDragWidget('throttleBtn', e)}
         style={widgetStyle('throttleBtn', 'bottom left')}
-        className={`fixed bottom-[64px] left-4 sm:bottom-[80px] sm:left-6 z-10 ${
+        className={`fixed bottom-[calc(max(0.875rem,var(--safe-bottom)+0.4rem)+54px)] left-[max(0.875rem,calc(var(--safe-left)+0.5rem))] sm:bottom-[84px] sm:left-[max(1.5rem,calc(var(--safe-left)+0.75rem))] z-10 ${
           settingsOpen ? editFrameClass('throttleBtn', 'rounded-xl') : 'pointer-events-auto'
         }`}
       >
@@ -649,7 +649,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
           tabIndex={-1}
           aria-label="Accelerate"
           {...bindHoldControl('throttle')}
-          className={`w-14 h-9 sm:w-16 sm:h-10 rounded-xl bg-[#07111e]/60 border-[1.5px] border-[#22d3ee] hover:bg-[#0e2238]/75 active:scale-95 shadow-[0_0_12px_rgba(34,211,238,0.28)] flex items-center justify-center touch-none ${
+          className={`w-16 h-11 sm:w-[70px] sm:h-11 rounded-xl bg-[#07111e]/68 border-[1.5px] border-[#22d3ee] hover:bg-[#0e2238]/80 active:scale-95 shadow-[0_0_12px_rgba(34,211,238,0.28)] flex items-center justify-center touch-none ${
             settingsOpen ? 'pointer-events-none' : 'cursor-pointer'
           }`}
         >
@@ -662,7 +662,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-brakeBtn"
         onPointerDown={(e) => startDragWidget('brakeBtn', e)}
         style={widgetStyle('brakeBtn', 'bottom left')}
-        className={`fixed bottom-4 left-4 sm:bottom-6 sm:left-6 z-10 ${
+        className={`fixed bottom-[max(0.875rem,calc(var(--safe-bottom)+0.4rem))] left-[max(0.875rem,calc(var(--safe-left)+0.5rem))] sm:bottom-6 sm:left-[max(1.5rem,calc(var(--safe-left)+0.75rem))] z-10 ${
           settingsOpen ? editFrameClass('brakeBtn', 'rounded-xl') : 'pointer-events-auto'
         }`}
       >
@@ -671,7 +671,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
           tabIndex={-1}
           aria-label="Brake or Reverse"
           {...bindHoldControl('brake')}
-          className={`w-14 h-9 sm:w-16 sm:h-10 rounded-xl bg-[#07111e]/60 border-[1.5px] border-[#22d3ee] hover:bg-[#0e2238]/75 active:scale-95 shadow-[0_0_12px_rgba(34,211,238,0.28)] flex items-center justify-center touch-none ${
+          className={`w-16 h-11 sm:w-[70px] sm:h-11 rounded-xl bg-[#07111e]/68 border-[1.5px] border-[#22d3ee] hover:bg-[#0e2238]/80 active:scale-95 shadow-[0_0_12px_rgba(34,211,238,0.28)] flex items-center justify-center touch-none ${
             settingsOpen ? 'pointer-events-none' : 'cursor-pointer'
           }`}
         >
@@ -684,7 +684,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-ramLeftBtn"
         onPointerDown={(e) => startDragWidget('ramLeftBtn', e)}
         style={widgetStyle('ramLeftBtn', 'bottom right')}
-        className={`fixed bottom-[62px] right-[96px] sm:bottom-[76px] sm:right-[118px] z-10 ${
+        className={`fixed bottom-[calc(max(0.875rem,var(--safe-bottom)+0.4rem)+54px)] right-[calc(max(0.875rem,var(--safe-right)+0.5rem)+92px)] sm:bottom-[82px] sm:right-[calc(max(1.5rem,var(--safe-right)+0.75rem)+102px)] z-10 ${
           settingsOpen ? editFrameClass('ramLeftBtn', 'rounded-full') : 'pointer-events-auto'
         }`}
       >
@@ -697,7 +697,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
             e.currentTarget.blur();
             onMobileDash(-1);
           }}
-          className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border transition-all active:scale-95 ${
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center border transition-all active:scale-95 ${
             dashReady
               ? 'border-[#a5f3fc]/80 text-[#06101c] shadow-[0_0_12px_rgba(34,211,238,0.5)]'
               : 'border-white/25 text-[#06101c]/70 opacity-50'
@@ -716,7 +716,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-ramRightBtn"
         onPointerDown={(e) => startDragWidget('ramRightBtn', e)}
         style={widgetStyle('ramRightBtn', 'bottom right')}
-        className={`fixed bottom-[62px] right-[28px] sm:bottom-[76px] sm:right-[38px] z-10 ${
+        className={`fixed bottom-[calc(max(0.875rem,var(--safe-bottom)+0.4rem)+54px)] right-[calc(max(0.875rem,var(--safe-right)+0.5rem)+14px)] sm:bottom-[82px] sm:right-[calc(max(1.5rem,var(--safe-right)+0.75rem)+16px)] z-10 ${
           settingsOpen ? editFrameClass('ramRightBtn', 'rounded-full') : 'pointer-events-auto'
         }`}
       >
@@ -729,7 +729,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
             e.currentTarget.blur();
             onMobileDash(1);
           }}
-          className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border transition-all active:scale-95 ${
+          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center border transition-all active:scale-95 ${
             dashReady
               ? 'border-[#a5f3fc]/80 text-[#06101c] shadow-[0_0_12px_rgba(34,211,238,0.5)]'
               : 'border-white/25 text-[#06101c]/70 opacity-50'
@@ -748,7 +748,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-steerLeftBtn"
         onPointerDown={(e) => startDragWidget('steerLeftBtn', e)}
         style={widgetStyle('steerLeftBtn', 'bottom right')}
-        className={`fixed bottom-4 right-[84px] sm:bottom-6 sm:right-[104px] z-10 ${
+        className={`fixed bottom-[max(0.875rem,calc(var(--safe-bottom)+0.4rem))] right-[calc(max(0.875rem,var(--safe-right)+0.5rem)+76px)] sm:bottom-6 sm:right-[calc(max(1.5rem,var(--safe-right)+0.75rem)+84px)] z-10 ${
           settingsOpen ? editFrameClass('steerLeftBtn', 'rounded-xl') : 'pointer-events-auto'
         }`}
       >
@@ -757,7 +757,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
           tabIndex={-1}
           aria-label="Steer Left"
           {...bindHoldControl('steerLeft')}
-          className={`w-14 h-9 sm:w-16 sm:h-10 rounded-xl bg-[#07111e]/60 border-[1.5px] border-[#22d3ee] hover:bg-[#0e2238]/75 active:scale-95 shadow-[0_0_12px_rgba(34,211,238,0.28)] flex items-center justify-center touch-none ${
+          className={`w-16 h-11 sm:w-[70px] sm:h-11 rounded-xl bg-[#07111e]/68 border-[1.5px] border-[#22d3ee] hover:bg-[#0e2238]/80 active:scale-95 shadow-[0_0_12px_rgba(34,211,238,0.28)] flex items-center justify-center touch-none ${
             settingsOpen ? 'pointer-events-none' : 'cursor-pointer'
           }`}
         >
@@ -770,7 +770,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         data-testid="hud-widget-steerRightBtn"
         onPointerDown={(e) => startDragWidget('steerRightBtn', e)}
         style={widgetStyle('steerRightBtn', 'bottom right')}
-        className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-10 ${
+        className={`fixed bottom-[max(0.875rem,calc(var(--safe-bottom)+0.4rem))] right-[max(0.875rem,calc(var(--safe-right)+0.5rem))] sm:bottom-6 sm:right-[max(1.5rem,calc(var(--safe-right)+0.75rem))] z-10 ${
           settingsOpen ? editFrameClass('steerRightBtn', 'rounded-xl') : 'pointer-events-auto'
         }`}
       >
@@ -779,7 +779,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
           tabIndex={-1}
           aria-label="Steer Right"
           {...bindHoldControl('steerRight')}
-          className={`w-14 h-9 sm:w-16 sm:h-10 rounded-xl bg-[#07111e]/60 border-[1.5px] border-[#22d3ee] hover:bg-[#0e2238]/75 active:scale-95 shadow-[0_0_12px_rgba(34,211,238,0.28)] flex items-center justify-center touch-none ${
+          className={`w-16 h-11 sm:w-[70px] sm:h-11 rounded-xl bg-[#07111e]/68 border-[1.5px] border-[#22d3ee] hover:bg-[#0e2238]/80 active:scale-95 shadow-[0_0_12px_rgba(34,211,238,0.28)] flex items-center justify-center touch-none ${
             settingsOpen ? 'pointer-events-none' : 'cursor-pointer'
           }`}
         >

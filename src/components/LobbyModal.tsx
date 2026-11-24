@@ -66,31 +66,31 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-30 flex items-center justify-center p-4 md:p-8"
+      className="fixed inset-0 z-30 flex items-center justify-center px-[max(0.75rem,calc(var(--safe-left)+0.5rem))] py-[max(0.75rem,calc(var(--safe-top)+0.25rem))] md:p-8 [@media(max-height:540px)]:py-2"
       style={{
         background: 'radial-gradient(circle at 20% 0%, #1a2844 0%, #0f141e 62%, #0b0e14 100%)',
       }}
     >
-      <div className="w-full max-w-4xl rounded-xl bg-[#131a27] border border-white/15 p-5 md:p-7 space-y-6 max-h-[92vh] overflow-y-auto shadow-2xl">
+      <div className="w-full max-w-4xl rounded-xl bg-[#131a27] border border-white/15 p-3.5 sm:p-5 md:p-7 space-y-4 sm:space-y-6 [@media(max-height:540px)]:p-3 [@media(max-height:540px)]:space-y-2.5 max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3 sm:pb-4 [@media(max-height:540px)]:pb-2">
+          <div className="flex items-center gap-2.5 sm:gap-3">
             <button
               type="button"
               onClick={() => {
                 if (room) onLeaveRoom();
                 onClose();
               }}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0b1019] border border-white/15 text-xs font-semibold text-white hover:bg-[#1e2738] cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 [@media(max-height:540px)]:py-1 rounded-lg bg-[#0b1019] border border-white/15 text-xs font-semibold text-white hover:bg-[#1e2738] cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back</span>
             </button>
             <div>
-              <h2 className="font-display text-xl md:text-2xl font-bold uppercase tracking-wide text-white">
+              <h2 className="font-display text-base sm:text-xl md:text-2xl [@media(max-height:540px)]:text-sm font-bold uppercase tracking-wide text-white leading-tight">
                 {room ? `Room ${room.code}` : 'Multiplayer Hub'}
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-[11px] sm:text-xs [@media(max-height:540px)]:text-[10px] text-slate-400">
                 {connected ? 'Live WebSocket server connected' : 'Connecting to race server...'}
               </p>
             </div>
@@ -100,7 +100,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
             <button
               type="button"
               onClick={handleCopyCode}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#0b1019] border border-white/15 text-xs font-mono-num font-bold text-white hover:border-[#ff4d2e] cursor-pointer"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0b1019] border border-white/15 text-xs font-mono-num font-bold text-white hover:border-[#ff4d2e] cursor-pointer"
             >
               {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-400" />}
               <span>{copied ? 'Copied!' : room.code}</span>
@@ -109,16 +109,16 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
         </div>
 
         {error && (
-          <div className="p-3 rounded-lg bg-red-500/15 border border-red-500/40 text-xs text-red-200">
+          <div className="p-2.5 rounded-lg bg-red-500/15 border border-red-500/40 text-xs text-red-200">
             {error}
           </div>
         )}
 
         {!room ? (
           /* Entry: Create or Join by Room Code */
-          <div className="space-y-6">
-            <div>
-              <label htmlFor="lobby-driver-name" className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5">
+          <div className="space-y-3.5 sm:space-y-5 [@media(max-height:540px)]:space-y-2.5">
+            <div className="flex flex-col [@media(max-height:540px)]:flex-row [@media(max-height:540px)]:items-center gap-1.5 [@media(max-height:540px)]:gap-3">
+              <label htmlFor="lobby-driver-name" className="block text-xs [@media(max-height:540px)]:text-[11px] font-semibold uppercase tracking-wider text-slate-300 shrink-0">
                 Driver Callsign
               </label>
               <input
@@ -128,19 +128,19 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
                 value={playerName}
                 onChange={(e) => onChangeName(e.target.value)}
                 placeholder="Apex Driver"
-                className="w-full max-w-sm px-3.5 py-2.5 rounded-lg bg-[#0b1019] border border-white/15 text-sm font-semibold text-white focus:outline-none focus:border-[#ff4d2e]"
+                className="w-full max-w-sm [@media(max-height:540px)]:max-w-[240px] px-3 py-2 [@media(max-height:540px)]:py-1.5 rounded-lg bg-[#0b1019] border border-white/15 text-sm [@media(max-height:540px)]:text-xs font-semibold text-white focus:outline-none focus:border-[#ff4d2e]"
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 min-[560px]:grid-cols-2 gap-3.5 sm:gap-5 [@media(max-height:540px)]:gap-3">
               {/* Create Room */}
-              <div className="rounded-xl bg-[#0b1019] border border-white/12 p-5 flex flex-col justify-between gap-5">
+              <div className="rounded-xl bg-[#0b1019] border border-white/12 p-4 sm:p-5 [@media(max-height:540px)]:p-3 flex flex-col justify-between gap-3.5 sm:gap-5 [@media(max-height:540px)]:gap-2.5">
                 <div>
-                  <span className="text-[11px] font-display font-bold uppercase tracking-widest text-[#ff4d2e]">
+                  <span className="text-[11px] [@media(max-height:540px)]:text-[10px] font-display font-bold uppercase tracking-widest text-[#ff4d2e]">
                     Private Grid
                   </span>
-                  <h3 className="mt-1 font-display text-lg font-bold text-white">Host a New Room</h3>
-                  <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
+                  <h3 className="mt-0.5 font-display text-base sm:text-lg [@media(max-height:540px)]:text-sm font-bold text-white">Host a New Room</h3>
+                  <p className="mt-1 text-xs [@media(max-height:540px)]:text-[11px] text-slate-400 leading-relaxed [@media(max-height:540px)]:leading-snug">
                     Generate a 6-character room code, choose any official or community circuit, set weather, and add AI fill racers.
                   </p>
                 </div>
@@ -148,7 +148,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
                   type="button"
                   disabled={!connected}
                   onClick={onCreateRoom}
-                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-[#ff4d2e] hover:bg-[#e83f22] disabled:opacity-45 text-white font-display font-bold text-sm tracking-wide cursor-pointer"
+                  className="flex items-center justify-center gap-2 py-2.5 sm:py-3 [@media(max-height:540px)]:py-2 px-4 rounded-lg bg-[#ff4d2e] hover:bg-[#e83f22] disabled:opacity-45 text-white font-display font-bold text-xs sm:text-sm tracking-wide cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Create Room Code</span>
@@ -163,14 +163,14 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
                     onJoinRoom(joinCode.trim().toUpperCase());
                   }
                 }}
-                className="rounded-xl bg-[#0b1019] border border-white/12 p-5 flex flex-col justify-between gap-5"
+                className="rounded-xl bg-[#0b1019] border border-white/12 p-4 sm:p-5 [@media(max-height:540px)]:p-3 flex flex-col justify-between gap-3.5 sm:gap-5 [@media(max-height:540px)]:gap-2.5"
               >
                 <div>
-                  <span className="text-[11px] font-display font-bold uppercase tracking-widest text-[#0ea5e9]">
+                  <span className="text-[11px] [@media(max-height:540px)]:text-[10px] font-display font-bold uppercase tracking-widest text-[#0ea5e9]">
                     Direct Invite
                   </span>
-                  <h3 className="mt-1 font-display text-lg font-bold text-white">Join with Room Code</h3>
-                  <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
+                  <h3 className="mt-0.5 font-display text-base sm:text-lg [@media(max-height:540px)]:text-sm font-bold text-white">Join with Room Code</h3>
+                  <p className="mt-1 text-xs [@media(max-height:540px)]:text-[11px] text-slate-400 leading-relaxed [@media(max-height:540px)]:leading-snug">
                     Enter your friend&apos;s 6-character code to join their starting grid immediately.
                   </p>
                   <input
@@ -180,13 +180,13 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
                     onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                     placeholder="e.g. APEX7K"
                     aria-label="Room Code"
-                    className="mt-3 w-full px-3.5 py-2.5 rounded-lg bg-[#131a27] border border-white/15 font-mono-num text-base tracking-widest uppercase text-white focus:outline-none focus:border-[#0ea5e9]"
+                    className="mt-2.5 [@media(max-height:540px)]:mt-1.5 w-full px-3 py-2 [@media(max-height:540px)]:py-1.5 rounded-lg bg-[#131a27] border border-white/15 font-mono-num text-sm sm:text-base [@media(max-height:540px)]:text-xs tracking-widest uppercase text-white focus:outline-none focus:border-[#0ea5e9]"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={!connected || joinCode.trim().length < 4}
-                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg bg-[#0ea5e9] hover:bg-[#0284c7] disabled:opacity-45 text-white font-display font-bold text-sm tracking-wide cursor-pointer"
+                  className="flex items-center justify-center gap-2 py-2.5 sm:py-3 [@media(max-height:540px)]:py-2 px-4 rounded-lg bg-[#0ea5e9] hover:bg-[#0284c7] disabled:opacity-45 text-white font-display font-bold text-xs sm:text-sm tracking-wide cursor-pointer"
                 >
                   <Users className="w-4 h-4" />
                   <span>Join Room</span>
@@ -196,9 +196,9 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
           </div>
         ) : (
           /* Inside Room Lobby */
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          <div className="grid grid-cols-1 min-[640px]:grid-cols-12 gap-4 sm:gap-6">
             {/* Left: Race Settings & Circuit SVG Preview */}
-            <div className="md:col-span-5 space-y-4">
+            <div className="min-[640px]:col-span-5 space-y-3 sm:space-y-4">
               <div className="rounded-xl bg-[#0b1019] border border-white/10 p-3.5 flex items-center gap-3">
                 {trackPreview && (
                   <div className="w-20 h-20 shrink-0 rounded-lg bg-[#131a27] border border-white/10 flex items-center justify-center">
@@ -326,7 +326,7 @@ export const LobbyModal: React.FC<LobbyModalProps> = ({
             </div>
 
             {/* Right: Connected Grid Roster */}
-            <div className="md:col-span-7 flex flex-col justify-between gap-4">
+            <div className="min-[640px]:col-span-7 flex flex-col justify-between gap-4">
               <div>
                 <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
                   <span>Connected Racers ({room.racers.length}/6)</span>

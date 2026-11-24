@@ -176,27 +176,27 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="select-map-title"
-      className="fixed inset-0 z-30 flex items-center justify-center p-3 sm:p-6 bg-[#080c13]/85"
+      className="fixed inset-0 z-30 flex items-center justify-center px-[max(0.75rem,calc(var(--safe-left)+0.5rem))] py-[max(0.5rem,calc(var(--safe-top)+0.25rem))] sm:p-6 bg-[#080c13]/85"
     >
-      <div className="w-full max-w-[920px] max-h-[94vh] flex flex-col rounded-2xl bg-[#11151f] border border-white/12 shadow-[0_24px_80px_rgba(0,0,0,0.75)] overflow-hidden">
+      <div className="w-full max-w-[920px] max-h-[calc(100dvh-1rem)] flex flex-col rounded-2xl bg-[#11151f] border border-white/12 shadow-[0_24px_80px_rgba(0,0,0,0.75)] overflow-hidden">
         {/* Top Header */}
-        <div className="flex items-center justify-between gap-4 px-5 sm:px-6 py-4 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-3.5 min-w-0">
+        <div className="flex items-center justify-between gap-4 px-4 sm:px-6 py-3 sm:py-4 [@media(max-height:540px)]:py-2 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-[#161b26] hover:bg-[#1f2636] border border-white/15 text-xs sm:text-sm font-medium text-slate-100 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 [@media(max-height:540px)]:py-1 rounded-lg bg-[#161b26] hover:bg-[#1f2636] border border-white/15 text-xs sm:text-sm font-medium text-slate-100 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back</span>
             </button>
             <div className="min-w-0">
-              <div className="font-display text-[11px] font-bold uppercase tracking-[0.14em] text-[#ff4d2e] leading-none">
+              <div className="font-display text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.14em] text-[#ff4d2e] leading-none">
                 Turbo Drifter
               </div>
               <h2
                 id="select-map-title"
-                className="mt-1 font-display text-xl sm:text-2xl font-bold text-white leading-none truncate"
+                className="mt-0.5 font-display text-lg sm:text-2xl [@media(max-height:540px)]:text-base font-bold text-white leading-none truncate"
               >
                 Select Map
               </h2>
@@ -230,8 +230,8 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
         </div>
 
         {/* Main Carousel Body */}
-        <div className="flex-1 overflow-y-auto px-5 sm:px-6 pt-5 pb-4 space-y-4">
-          <p className="text-sm text-slate-300">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-3 sm:pt-5 pb-3 sm:pb-4 [@media(max-height:540px)]:pt-2 [@media(max-height:540px)]:pb-2 space-y-3 sm:space-y-4 [@media(max-height:540px)]:space-y-2">
+          <p className="text-xs sm:text-sm [@media(max-height:540px)]:hidden text-slate-300">
             Swipe through the maps and choose your active circuit.
           </p>
 
@@ -242,7 +242,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            className="flex gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar pb-1 cursor-grab active:cursor-grabbing"
+            className="flex gap-3.5 sm:gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar pb-1 cursor-grab active:cursor-grabbing"
           >
             {cardEntries.map(({ track, metrics, palette }, idx) => {
               const isSelected = track.id === activeTrack?.id;
@@ -262,7 +262,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                     onSelectTrack(track.id);
                     scrollToIndex(idx, 'smooth');
                   }}
-                  className={`group text-left w-[300px] sm:w-[356px] shrink-0 snap-start rounded-xl overflow-hidden bg-[#0e131d] border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff4d2e] ${
+                  className={`group text-left w-[276px] sm:w-[356px] [@media(max-height:540px)]:w-[264px] shrink-0 snap-start rounded-xl overflow-hidden bg-[#0e131d] border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff4d2e] ${
                     isSelected
                       ? 'border-[#ff4d2e] shadow-[0_0_0_1px_rgba(255,77,46,0.45)]'
                       : 'border-white/12 hover:border-white/28'
@@ -270,7 +270,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                 >
                   {/* Top-Down Circuit Illustration */}
                   <div
-                    className="relative h-[168px] sm:h-[176px] w-full overflow-hidden border-b border-white/10"
+                    className="relative h-[138px] sm:h-[176px] [@media(max-height:540px)]:h-[104px] w-full overflow-hidden border-b border-white/10"
                     style={{ backgroundColor: palette.bg }}
                   >
                     <svg
@@ -401,7 +401,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
         </div>
 
         {/* Bottom Footer Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 sm:px-6 py-4 border-t border-white/10 bg-[#0d111a] shrink-0">
+        <div className="flex flex-col min-[520px]:flex-row min-[520px]:items-center justify-between gap-2.5 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 [@media(max-height:540px)]:py-2 border-t border-white/10 bg-[#0d111a] shrink-0">
           {/* Compact Weather Selector */}
           <div className="flex items-center gap-2">
             <span id="map-weather-label" className="text-xs font-medium text-slate-400 shrink-0">
@@ -421,7 +421,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                     type="button"
                     aria-pressed={active}
                     onClick={() => onSelectWeather(preset.id)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 [@media(max-height:540px)]:py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                       active
                         ? 'bg-[#ff4d2e]/20 text-white border border-[#ff4d2e]/70'
                         : 'text-slate-300 hover:text-white border border-transparent'
@@ -446,7 +446,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-full sm:w-auto px-6 py-3 rounded-lg bg-[#ff4d2e] hover:bg-[#e83f22] text-white font-display font-bold text-sm tracking-wide shadow-[0_6px_20px_rgba(255,77,46,0.28)] transition-colors cursor-pointer whitespace-nowrap"
+            className="w-full min-[520px]:w-auto px-5 sm:px-6 py-2.5 sm:py-3 [@media(max-height:540px)]:py-2 rounded-lg bg-[#ff4d2e] hover:bg-[#e83f22] text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-[0_6px_20px_rgba(255,77,46,0.28)] transition-colors cursor-pointer whitespace-nowrap"
           >
             Return to Main Menu
           </button>

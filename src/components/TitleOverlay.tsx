@@ -46,7 +46,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
           onToggleMute();
         }}
         aria-label={muted ? 'Unmute audio' : 'Mute audio'}
-        className="pointer-events-auto fixed top-4 right-4 sm:top-6 sm:right-8 z-30 w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-[#141820]/90 hover:bg-[#1f2634] border border-white/15 flex items-center justify-center text-slate-100 transition-colors cursor-pointer"
+        className="pointer-events-auto fixed top-[max(1rem,calc(var(--safe-top)+0.5rem))] right-[max(1rem,calc(var(--safe-right)+0.75rem))] sm:top-6 sm:right-8 z-30 w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-[#141820]/90 hover:bg-[#1f2634] border border-white/15 flex items-center justify-center text-slate-100 transition-colors cursor-pointer"
       >
         {muted ? (
           <VolumeX className="w-4 h-4 text-slate-400" />
@@ -56,7 +56,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
       </button>
 
       {/* Left-Aligned Title & Compact Action Stack (consistent across all screen sizes) */}
-      <div className="relative z-10 w-full px-5 sm:px-8 md:px-10 py-4 [@media(max-height:460px)]:py-2">
+      <div className="relative z-10 w-full px-[max(1.25rem,calc(var(--safe-left)+1rem))] sm:px-8 md:px-10 py-4 [@media(max-height:460px)]:py-2">
         <div className="pointer-events-auto w-full max-w-[332px] [@media(max-height:460px)]:max-w-[292px] space-y-4 [@media(max-height:460px)]:space-y-2.5">
           {/* Brand Emblem + Tagline */}
           <div>

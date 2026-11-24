@@ -20,8 +20,8 @@ export const PauseModal: React.FC<PauseModalProps> = ({
   onExitToTitle,
 }) => {
   return (
-    <div className="fixed inset-0 z-30 bg-black/65 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm rounded-xl bg-[#161c26] border border-white/15 p-6 space-y-5">
+    <div className="fixed inset-0 z-30 bg-black/65 flex items-center justify-center p-3 sm:p-4">
+      <div className="w-full max-w-sm max-h-[calc(100dvh-1.5rem)] overflow-y-auto overscroll-contain rounded-xl bg-[#161c26] border border-white/15 p-5 sm:p-6 [@media(max-height:540px)]:p-4 space-y-4 sm:space-y-5 [@media(max-height:540px)]:space-y-3">
         <div>
           <h2 className="font-display text-2xl font-bold text-white">Race Paused</h2>
           <p className="text-xs text-slate-400 mt-1">
@@ -87,15 +87,15 @@ export const ResultsModal: React.FC<ResultsModalProps> = ({
   const won = local?.position === 1;
 
   return (
-    <div className="fixed inset-0 z-30 bg-black/75 flex items-center justify-center p-4">
-      <div className="w-full max-w-xl rounded-xl bg-[#161c26] border border-white/15 p-6 space-y-5">
+    <div className="fixed inset-0 z-30 bg-black/75 flex items-center justify-center p-3 sm:p-4">
+      <div className="w-full max-w-xl max-h-[calc(100dvh-1.5rem)] overflow-y-auto overscroll-contain rounded-xl bg-[#161c26] border border-white/15 p-4 sm:p-6 [@media(max-height:540px)]:p-3.5 space-y-4 sm:space-y-5 [@media(max-height:540px)]:space-y-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-lg bg-[#ff4d2e]/15 border border-[#ff4d2e]/40 flex items-center justify-center">
-              <Trophy className={`w-6 h-6 ${won ? 'text-[#f59e0b]' : 'text-[#ff4d2e]'}`} />
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-[#ff4d2e]/15 border border-[#ff4d2e]/40 flex items-center justify-center shrink-0">
+              <Trophy className={`w-5 h-5 sm:w-6 sm:h-6 ${won ? 'text-[#f59e0b]' : 'text-[#ff4d2e]'}`} />
             </div>
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">
+              <h2 className="font-display text-xl sm:text-2xl [@media(max-height:540px)]:text-lg font-bold text-white">
                 {won ? '1st Place Victory!' : `Finished P${local?.position ?? '-'}`}
               </h2>
               <p className="text-xs text-slate-400">
@@ -105,7 +105,7 @@ export const ResultsModal: React.FC<ResultsModalProps> = ({
           </div>
         </div>
 
-        <div className="space-y-1.5 max-h-64 overflow-y-auto">
+        <div className="space-y-1.5 max-h-64 [@media(max-height:540px)]:max-h-36 overflow-y-auto">
           {standings.map((r) => {
             const isSelf = r.id === localId;
             return (

@@ -191,7 +191,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
   return (
     <div
       data-testid="garage-modal"
-      className="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between px-4 sm:px-6 md:px-8 py-2.5 sm:py-4 md:py-5 [@media(max-height:540px)]:px-3 [@media(max-height:540px)]:py-1.5 overflow-hidden select-none"
+      className="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between px-[max(1rem,calc(var(--safe-left)+0.75rem))] sm:px-[max(1.5rem,calc(var(--safe-left)+1.25rem))] md:px-8 pt-[max(0.625rem,calc(var(--safe-top)+0.25rem))] pb-[max(0.625rem,calc(var(--safe-bottom)+0.25rem))] sm:py-4 md:py-5 [@media(max-height:540px)]:px-[max(0.75rem,calc(var(--safe-left)+0.5rem))] [@media(max-height:540px)]:pt-[max(0.3rem,calc(var(--safe-top)+0.15rem))] [@media(max-height:540px)]:pb-[max(0.3rem,calc(var(--safe-bottom)+0.15rem))] overflow-hidden select-none"
     >
       {/* Subtle left-edge readability scrim behind all left-side details */}
       <div
@@ -238,29 +238,29 @@ export const GarageModal: React.FC<GarageModalProps> = ({
       </div>
 
       {/* Middle Hero Stage: Always Vertically Stacked Car Info (Top) + Car Stats & Tune Setup (Bottom) */}
-      <div className="flex-1 min-h-0 flex items-start pt-1.5 [@media(min-aspect-ratio:105/100)]:items-center [@media(min-aspect-ratio:105/100)]:pt-0 justify-start py-1 sm:py-2 [@media(max-height:540px)]:py-0.5">
+      <div className="flex-1 min-h-0 flex items-start pt-1.5 [@media(min-aspect-ratio:105/100)]:items-center [@media(min-aspect-ratio:105/100)]:pt-0 justify-start py-1 sm:py-2 [@media(max-height:540px)]:py-0">
         <div
           ref={leftDetailsRef}
           data-testid="garage-left-details"
-          className="pointer-events-auto flex flex-col items-stretch w-[min(100%,clamp(206px,54vw,256px))] min-[560px]:[@media(min-aspect-ratio:105/100)]:w-[clamp(212px,22vw,292px)] [@media(max-height:540px)]:w-[clamp(188px,28vw,232px)] gap-[clamp(0.45rem,1.5vh,0.9rem)] [@media(max-height:540px)]:gap-1 max-h-full overflow-y-auto no-scrollbar"
+          className="pointer-events-auto flex flex-col items-stretch w-[min(100%,clamp(206px,54vw,256px))] min-[560px]:[@media(min-aspect-ratio:105/100)]:w-[clamp(212px,22vw,292px)] [@media(max-height:540px)]:w-[clamp(182px,27vw,224px)] gap-[clamp(0.45rem,1.5vh,0.9rem)] [@media(max-height:540px)]:gap-0.5 max-h-full overflow-y-auto no-scrollbar"
         >
           {/* Top Block: Brand, Model, PR Pill, Core Spec Table */}
           <div className="w-full min-w-0 space-y-[clamp(0.3rem,1vh,0.6rem)] [@media(max-height:540px)]:space-y-0.5">
             <div className="space-y-0.5 [@media(max-height:540px)]:space-y-0">
-              <div className="text-[clamp(8.5px,0.8vw,10.5px)] [@media(max-height:540px)]:text-[8px] font-display font-bold tracking-widest uppercase text-orange-300/80">
+              <div className="text-[clamp(8.5px,0.8vw,10.5px)] [@media(max-height:540px)]:text-[7.5px] font-display font-bold tracking-widest uppercase text-orange-300/80 leading-none">
                 {activeSpec.brand}
               </div>
-              <div className="font-display text-[clamp(0.85rem,1.35vw,1.15rem)] [@media(max-height:540px)]:text-[11px] font-bold text-stone-50 leading-tight drop-shadow">
+              <div className="font-display text-[clamp(0.85rem,1.35vw,1.15rem)] [@media(max-height:540px)]:text-[10.5px] font-bold text-stone-50 leading-tight drop-shadow">
                 {activeSpec.name} &apos;{shortYear}
               </div>
               <div className="pt-0.5 [@media(max-height:540px)]:pt-0">
-                <span className="inline-flex items-center px-2.5 [@media(max-height:540px)]:px-1.5 py-0.5 [@media(max-height:540px)]:py-0 rounded-full border border-orange-300/35 bg-[#120d0b]/65 font-mono-num text-[clamp(9px,0.85vw,11px)] [@media(max-height:540px)]:text-[8.5px] font-semibold text-orange-100">
+                <span className="inline-flex items-center px-2.5 [@media(max-height:540px)]:px-1.5 py-0.5 [@media(max-height:540px)]:py-0 rounded-full border border-orange-300/35 bg-[#120d0b]/65 font-mono-num text-[clamp(9px,0.85vw,11px)] [@media(max-height:540px)]:text-[8px] font-semibold text-orange-100">
                   PR {activeSummary.rating}.00
                 </span>
               </div>
             </div>
 
-            <dl className="pt-0.5 [@media(max-height:540px)]:pt-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2.5 gap-y-1 [@media(max-height:540px)]:gap-x-1.5 [@media(max-height:540px)]:gap-y-0 text-[clamp(10px,0.9vw,12px)] [@media(max-height:540px)]:text-[9px] leading-tight items-baseline">
+            <dl className="pt-0.5 [@media(max-height:540px)]:pt-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2.5 gap-y-1 [@media(max-height:540px)]:gap-x-1.5 [@media(max-height:540px)]:gap-y-0 text-[clamp(10px,0.9vw,12px)] [@media(max-height:540px)]:text-[8.5px] leading-tight items-baseline">
               <dt className="text-right text-stone-400">Class</dt>
               <dd className="font-semibold text-stone-100 truncate">{activeSpec.category}</dd>
 
@@ -278,9 +278,9 @@ export const GarageModal: React.FC<GarageModalProps> = ({
           </div>
 
           {/* Bottom Block: Tier Strip, Handling Bar, Top Spd / 0-100, Tune Setup Toggle */}
-          <div className="w-full min-w-0 pt-[clamp(0.45rem,1.5vh,0.85rem)] [@media(max-height:540px)]:pt-1 border-t border-orange-200/15 space-y-[clamp(0.4rem,1.2vh,0.7rem)] [@media(max-height:540px)]:space-y-1">
+          <div className="w-full min-w-0 pt-[clamp(0.45rem,1.5vh,0.85rem)] [@media(max-height:540px)]:pt-0.5 border-t border-orange-200/15 space-y-[clamp(0.4rem,1.2vh,0.7rem)] [@media(max-height:540px)]:space-y-0.5">
             {cardPage === 'specs' ? (
-              <div className="space-y-[clamp(0.4rem,1.2vh,0.7rem)] [@media(max-height:540px)]:space-y-1">
+              <div className="space-y-[clamp(0.4rem,1.2vh,0.7rem)] [@media(max-height:540px)]:space-y-0.5">
                 {/* Performance Tier Strip */}
                 <div className="grid grid-cols-5 gap-1">
                   {TIER_ORDER.map((tier) => {
@@ -288,7 +288,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                     return (
                       <div
                         key={tier}
-                        className={`h-6 [@media(max-height:540px)]:h-4 flex items-center justify-center rounded-xs font-display text-[11px] [@media(max-height:540px)]:text-[9px] font-extrabold border transition-colors ${
+                        className={`h-6 [@media(max-height:540px)]:h-3.5 flex items-center justify-center rounded-xs font-display text-[11px] [@media(max-height:540px)]:text-[8.5px] font-extrabold border transition-colors ${
                           isActive
                             ? 'bg-orange-500/20 border-orange-400 text-orange-100 shadow-[0_0_12px_rgba(249,115,22,0.22)]'
                             : 'bg-[#120d0b]/55 border-white/12 text-stone-400'
@@ -418,8 +418,8 @@ export const GarageModal: React.FC<GarageModalProps> = ({
         </div>
       </div>
 
-      {/* Bottom Carousel Dock */}
-      <div className="shrink-0 space-y-1.5 sm:space-y-2 [@media(max-height:540px)]:space-y-1">
+        {/* Bottom Carousel Dock */}
+      <div className="shrink-0 space-y-1.5 sm:space-y-2 [@media(max-height:540px)]:space-y-0.5">
         {/* Category Tabs + Prev/Next Controls */}
         <div className="pointer-events-auto flex items-center justify-between gap-2">
           <div className="inline-flex items-center gap-1 p-1 [@media(max-height:540px)]:p-0.5 rounded-sm bg-[#16110e]/95 border border-orange-200/15 overflow-x-auto no-scrollbar">
@@ -430,7 +430,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                   key={tab}
                   type="button"
                   onClick={() => setCategory(tab)}
-                  className={`px-3 sm:px-3.5 py-1 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-0.5 rounded-xs text-[10px] sm:text-xs [@media(max-height:540px)]:text-[9.5px] font-display font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0 ${
+                  className={`px-3 sm:px-3.5 py-1 [@media(max-height:540px)]:px-2 [@media(max-height:540px)]:py-0.5 rounded-xs text-[10px] sm:text-xs [@media(max-height:540px)]:text-[9px] font-display font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0 ${
                     active
                       ? 'bg-gradient-to-b from-orange-400 to-orange-500 text-stone-950 shadow-sm'
                       : 'text-stone-300 hover:text-white hover:bg-white/10'
@@ -482,7 +482,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                 aria-label={`Select ${m.name}`}
                 aria-pressed={selected}
                 onClick={() => selectModel(m)}
-                className={`relative w-[clamp(124px,14.5vw,196px)] h-[clamp(64px,13vh,108px)] [@media(max-height:540px)]:w-[112px] [@media(max-height:540px)]:h-[52px] shrink-0 rounded-sm overflow-hidden text-left transition-all cursor-pointer bg-[#161210] ${
+                className={`relative w-[clamp(124px,14.5vw,196px)] h-[clamp(64px,13vh,108px)] [@media(max-height:540px)]:w-[108px] [@media(max-height:540px)]:h-[44px] shrink-0 rounded-sm overflow-hidden text-left transition-all cursor-pointer bg-[#161210] ${
                   selected
                     ? 'border-2 border-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.28)]'
                     : 'border border-white/15 hover:border-orange-300/45 opacity-90 hover:opacity-100'

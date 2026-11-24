@@ -563,7 +563,7 @@ test('computeGarageCameraFraming prevents 3D car from overlapping left stats pan
     );
     assert.ok(frame.shiftX < 0, `${c.label}: camera must shift left so car moves into right showcase zone`);
     assert.ok(
-      frame.camY > frame.lookY && frame.lookY >= 0.45,
+      frame.camY > frame.lookY + 0.85 && frame.lookY >= 0.15,
       `${c.label}: camera must pitch downward onto floor (camY=${frame.camY.toFixed(2)}, lookY=${frame.lookY.toFixed(2)})`,
     );
   }
