@@ -5,7 +5,7 @@ interface LoadingScreenProps {
   progress: StartupLoadProgress;
 }
 
-const LOADING_BG_URL = '/assets/aistudio/image_575c520e.png';
+const LOADING_BG_URL = '/assets/aistudio/downloadresources.png';
 
 export const LoadingScreen: React.FC<LoadingScreenProps> = ({ progress }) => {
   const pct = Math.max(1, Math.min(100, Math.round(progress.percent)));

@@ -1,3 +1,4 @@
+
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import ArrowLeft from 'lucide-react/dist/esm/icons/arrow-left.js';
 import ChevronLeft from 'lucide-react/dist/esm/icons/chevron-left.js';
@@ -6,9 +7,12 @@ import CloudRain from 'lucide-react/dist/esm/icons/cloud-rain.js';
 import MapIcon from 'lucide-react/dist/esm/icons/map.js';
 import Moon from 'lucide-react/dist/esm/icons/moon.js';
 import Sun from 'lucide-react/dist/esm/icons/sun.js';
+
 import { buildTrackCardMetrics } from '../shared/trackMath';
 import type { TrackDefinition, TrackTheme, WeatherPreset } from '../shared/types';
 import { WEATHER_PRESETS } from '../shared/weather';
+
+const MAP_SELECTION_BG_URL = '/assets/aistudio/mapselectionbg.png';
 
 interface MapSelectModalProps {
   tracks: TrackDefinition[];
@@ -81,17 +85,24 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
 }) => {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const cardRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
   const dragStateRef = useRef<{
     active: boolean;
     startX: number;
     scrollLeft: number;
     moved: boolean;
-  }>({ active: false, startX: 0, scrollLeft: 0, moved: false });
+  }>({
+    active: false,
+    startX: 0,
+    scrollLeft: 0,
+    moved: false,
+  });
 
   const activeIndex = Math.max(
     0,
     tracks.findIndex((t) => t.id === selectedTrackId),
   );
+
   const activeTrack = tracks[activeIndex] ?? tracks[0];
 
   const cardEntries = useMemo(
@@ -104,12 +115,20 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
     [tracks],
   );
 
-  const scrollToIndex = useCallback((idx: number, behavior: ScrollBehavior = 'smooth') => {
-    const card = cardRefs.current[idx];
-    if (card) {
-      card.scrollIntoView({ behavior, block: 'nearest', inline: 'start' });
-    }
-  }, []);
+  const scrollToIndex = useCallback(
+    (idx: number, behavior: ScrollBehavior = 'smooth') => {
+      const card = cardRefs.current[idx];
+
+      if (card) {
+        card.scrollIntoView({
+          behavior,
+          block: 'nearest',
+          inline: 'start',
+        });
+      }
+    },
+    [],
+  );
 
   // Scroll active track card into view on mount
   useEffect(() => {
@@ -119,7 +138,10 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
   const selectByIndex = useCallback(
     (nextIdx: number) => {
       if (tracks.length === 0) return;
-      const wrapped = ((nextIdx % tracks.length) + tracks.length) % tracks.length;
+
+      const wrapped =
+        ((nextIdx % tracks.length) + tracks.length) % tracks.length;
+
       onSelectTrack(tracks[wrapped].id);
       scrollToIndex(wrapped, 'smooth');
     },
@@ -137,14 +159,18 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
         selectByIndex(activeIndex + 1);
       }
     };
+
     window.addEventListener('keydown', onKeyDown);
+
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeIndex, selectByIndex]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType === 'touch') return; // native touch swipe works best
+    if (e.pointerType === 'touch') return;
+
     const el = scrollerRef.current;
     if (!el) return;
+
     dragStateRef.current = {
       active: true,
       startX: e.clientX,
@@ -156,8 +182,11 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragStateRef.current;
     const el = scrollerRef.current;
+
     if (!drag.active || !el) return;
+
     const dx = e.clientX - drag.startX;
+
     if (Math.abs(dx) > 6) {
       drag.moved = true;
       el.scrollLeft = drag.scrollLeft - dx;
@@ -168,7 +197,6 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
     dragStateRef.current.active = false;
   };
 
-  // Show up to 3-6 indicator bars cleanly matching the top-right segmented dashes
   const indicatorCount = Math.min(tracks.length, 6);
 
   return (
@@ -178,22 +206,39 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
       aria-labelledby="select-map-title"
       className="fixed inset-0 z-30 flex items-center justify-center px-[max(0.75rem,calc(var(--safe-left)+0.5rem))] py-[max(0.5rem,calc(var(--safe-top)+0.25rem))] sm:p-6 bg-[#080c13]/85"
     >
-      <div className="w-full max-w-[920px] max-h-[calc(100dvh-1rem)] flex flex-col rounded-2xl bg-[#11151f] border border-white/12 shadow-[0_24px_80px_rgba(0,0,0,0.75)] overflow-hidden">
+      {/* INNER MODAL PANEL - BACKGROUND IMAGE ONLY INSIDE THIS DIV */}
+      <div
+        className="relative w-full max-w-[920px] max-h-[calc(100dvh-1rem)] flex flex-col rounded-2xl border border-orange-500/30 shadow-[0_0_25px_rgba(255,77,46,0.18),0_24px_80px_rgba(0,0,0,0.75)] overflow-hidden"
+        style={{
+          backgroundImage: `
+            linear-gradient(
+              rgba(8, 12, 19, 0.48),
+              rgba(8, 12, 19, 0.72)
+            ),
+            url("${MAP_SELECTION_BG_URL}")
+          `,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
         {/* Top Header */}
         <div className="flex items-center justify-between gap-4 px-4 sm:px-6 py-3 sm:py-4 [@media(max-height:540px)]:py-2 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 [@media(max-height:540px)]:py-1 rounded-lg bg-[#161b26] hover:bg-[#1f2636] border border-white/15 text-xs sm:text-sm font-medium text-slate-100 transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 [@media(max-height:540px)]:py-1 rounded-lg bg-[#171923]/90 hover:bg-[#ff4d2e]/20 border border-orange-500/30 hover:border-orange-400 text-xs sm:text-sm font-medium text-slate-100 shadow-[0_0_10px_rgba(255,77,46,0.12)] hover:shadow-[0_0_18px_rgba(255,77,46,0.55)] transition-all duration-300 cursor-pointer shrink-0 whitespace-nowrap"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Back</span>
             </button>
+
             <div className="min-w-0">
               <div className="font-display text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.14em] text-[#ff4d2e] leading-none">
                 Turbo Drifter
               </div>
+
               <h2
                 id="select-map-title"
                 className="mt-0.5 font-display text-lg sm:text-2xl [@media(max-height:540px)]:text-base font-bold text-white leading-none truncate"
@@ -204,24 +249,37 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
           </div>
 
           {/* Top-right progress dashes */}
-          <div className="flex items-center gap-1.5 shrink-0" aria-label="Circuit progress">
+          <div
+            className="flex items-center gap-1.5 shrink-0"
+            aria-label="Circuit progress"
+          >
             {Array.from({ length: indicatorCount }, (_, idx) => {
               const mappedIdx =
                 tracks.length <= indicatorCount
                   ? idx
-                  : Math.round((idx / Math.max(1, indicatorCount - 1)) * (tracks.length - 1));
+                  : Math.round(
+                      (idx / Math.max(1, indicatorCount - 1)) *
+                        (tracks.length - 1),
+                    );
+
               const isCurrent =
                 tracks.length <= indicatorCount
                   ? idx === activeIndex
-                  : Math.round((activeIndex / Math.max(1, tracks.length - 1)) * (indicatorCount - 1)) === idx;
+                  : Math.round(
+                      (activeIndex / Math.max(1, tracks.length - 1)) *
+                        (indicatorCount - 1),
+                    ) === idx;
+
               return (
                 <button
                   key={idx}
                   type="button"
                   aria-label={`Select circuit ${mappedIdx + 1}`}
                   onClick={() => selectByIndex(mappedIdx)}
-                  className={`h-1.5 w-7 rounded-full transition-colors cursor-pointer ${
-                    isCurrent ? 'bg-[#ff4d2e]' : 'bg-white/20 hover:bg-white/35'
+                  className={`h-1.5 w-7 rounded-full transition-all duration-300 cursor-pointer ${
+                    isCurrent
+                      ? 'bg-[#ff4d2e] shadow-[0_0_12px_rgba(255,77,46,0.9)]'
+                      : 'bg-white/20 hover:bg-orange-400/70'
                   }`}
                 />
               );
@@ -230,8 +288,8 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
         </div>
 
         {/* Main Carousel Body */}
-        <div className="flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-3 sm:pt-5 pb-3 sm:pb-4 [@media(max-height:540px)]:pt-2 [@media(max-height:540px)]:pb-2 space-y-3 sm:space-y-4 [@media(max-height:540px)]:space-y-2">
-          <p className="text-xs sm:text-sm [@media(max-height:540px)]:hidden text-slate-300">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-3 sm:pt-5 pb-3 sm:pb-4 [@media(max-height:540px)]:pt-2 [@media(max-height:540px)]:pb-2 space-y-3 sm:space-y-4 [@media(max-height:540px)]:space-y-2">
+          <p className="text-xs sm:text-sm [@media(max-height:540px)]:hidden text-slate-200">
             Swipe through the maps and choose your active circuit.
           </p>
 
@@ -246,6 +304,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
           >
             {cardEntries.map(({ track, metrics, palette }, idx) => {
               const isSelected = track.id === activeTrack?.id;
+
               return (
                 <button
                   key={track.id}
@@ -259,13 +318,14 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                       dragStateRef.current.moved = false;
                       return;
                     }
+
                     onSelectTrack(track.id);
                     scrollToIndex(idx, 'smooth');
                   }}
                   className={`group text-left w-[276px] sm:w-[356px] [@media(max-height:540px)]:w-[264px] shrink-0 snap-start rounded-xl overflow-hidden bg-[#0e131d] border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff4d2e] ${
                     isSelected
-                      ? 'border-[#ff4d2e] shadow-[0_0_0_1px_rgba(255,77,46,0.45)]'
-                      : 'border-white/12 hover:border-white/28'
+                      ? 'border-[#ff4d2e] shadow-[0_0_0_1px_rgba(255,77,46,0.45),0_0_20px_rgba(255,77,46,0.16)]'
+                      : 'border-white/12 hover:border-orange-400/60'
                   }`}
                 >
                   {/* Top-Down Circuit Illustration */}
@@ -279,7 +339,6 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                       role="img"
                       aria-label={`${track.name} top-down circuit preview`}
                     >
-                      {/* Outer track edge */}
                       <path
                         d={metrics.svgPath}
                         fill="none"
@@ -288,7 +347,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                         strokeLinejoin="round"
                         strokeLinecap="round"
                       />
-                      {/* Asphalt surface */}
+
                       <path
                         d={metrics.svgPath}
                         fill="none"
@@ -297,7 +356,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                         strokeLinejoin="round"
                         strokeLinecap="round"
                       />
-                      {/* Dashed racing line */}
+
                       <path
                         d={metrics.svgPath}
                         fill="none"
@@ -309,15 +368,19 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                       />
                     </svg>
 
-                    {/* Top-left BUILT-IN / CUSTOM badge */}
+                    {/* BUILT-IN / CUSTOM badge */}
                     <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/65 border border-white/15 font-display text-[10px] font-bold uppercase tracking-wider text-white">
                       <span
                         className="w-2 h-2 rounded-full shrink-0"
                         style={{
-                          backgroundColor: track.isBuiltIn ? palette.dotColor : '#38bdf8',
+                          backgroundColor: track.isBuiltIn
+                            ? palette.dotColor
+                            : '#38bdf8',
                         }}
                       />
-                      <span>{track.isBuiltIn ? 'Built-In' : 'Custom'}</span>
+                      <span>
+                        {track.isBuiltIn ? 'Built-In' : 'Custom'}
+                      </span>
                     </span>
                   </div>
 
@@ -327,9 +390,12 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                       <h3 className="font-display text-lg font-bold text-white truncate">
                         {track.name}
                       </h3>
+
                       <MapIcon
                         className={`w-4 h-4 shrink-0 transition-colors ${
-                          isSelected ? 'text-[#ff4d2e]' : 'text-[#38bdf8]'
+                          isSelected
+                            ? 'text-[#ff4d2e]'
+                            : 'text-[#38bdf8]'
                         }`}
                       />
                     </div>
@@ -340,28 +406,40 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
 
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 text-xs">
                       <div className="flex items-baseline gap-1.5 min-w-0">
-                        <span className="text-slate-400 shrink-0">Area</span>
+                        <span className="text-slate-400 shrink-0">
+                          Area
+                        </span>
+
                         <span className="font-mono-num font-bold text-slate-100 truncate">
                           {metrics.areaWidthMeters} × {metrics.areaDepthMeters} m
                         </span>
                       </div>
 
                       <div className="flex items-baseline gap-1.5 min-w-0">
-                        <span className="text-slate-400 shrink-0">Lap</span>
+                        <span className="text-slate-400 shrink-0">
+                          Lap
+                        </span>
+
                         <span className="font-mono-num font-bold text-slate-100 truncate">
                           {metrics.lapKmLabel}
                         </span>
                       </div>
 
                       <div className="flex items-baseline gap-1.5 min-w-0">
-                        <span className="text-slate-400 shrink-0">Road</span>
+                        <span className="text-slate-400 shrink-0">
+                          Road
+                        </span>
+
                         <span className="font-mono-num font-bold text-slate-100">
                           {metrics.roadWidth} m
                         </span>
                       </div>
 
                       <div className="flex items-baseline gap-1.5 min-w-0">
-                        <span className="text-slate-400 shrink-0">Boosts / hazards</span>
+                        <span className="text-slate-400 shrink-0">
+                          Boosts / hazards
+                        </span>
+
                         <span className="font-mono-num font-bold text-slate-100 whitespace-nowrap">
                           {metrics.boostCount} / {metrics.hazardCount}
                         </span>
@@ -373,27 +451,32 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
             })}
           </div>
 
-          {/* Prev / Active Label / Next Controls */}
+          {/* Previous / Active Label / Next Controls */}
           <div className="flex items-center justify-between gap-3 pt-1">
             <button
               type="button"
               aria-label="Previous map"
               onClick={() => selectByIndex(activeIndex - 1)}
-              className="w-10 h-10 rounded-lg bg-[#161b26] hover:bg-[#202838] border border-white/15 flex items-center justify-center text-slate-200 hover:text-white transition-colors cursor-pointer shrink-0"
+              className="w-10 h-10 rounded-lg bg-[#161b26]/90 hover:bg-[#ff4d2e]/20 border border-white/15 hover:border-orange-400 flex items-center justify-center text-slate-200 hover:text-white hover:shadow-[0_0_18px_rgba(255,77,46,0.55)] transition-all duration-300 cursor-pointer shrink-0"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
 
             <div className="text-xs sm:text-sm text-center truncate">
-              <span className="font-semibold text-white">{activeTrack?.name ?? 'Circuit'}</span>
-              <span className="text-slate-400"> · {tracks.length} maps</span>
+              <span className="font-semibold text-white">
+                {activeTrack?.name ?? 'Circuit'}
+              </span>
+
+              <span className="text-slate-300">
+                {' '}· {tracks.length} maps
+              </span>
             </div>
 
             <button
               type="button"
               aria-label="Next map"
               onClick={() => selectByIndex(activeIndex + 1)}
-              className="w-10 h-10 rounded-lg bg-[#161b26] hover:bg-[#202838] border border-white/15 flex items-center justify-center text-slate-200 hover:text-white transition-colors cursor-pointer shrink-0"
+              className="w-10 h-10 rounded-lg bg-[#161b26]/90 hover:bg-[#ff4d2e]/20 border border-white/15 hover:border-orange-400 flex items-center justify-center text-slate-200 hover:text-white hover:shadow-[0_0_18px_rgba(255,77,46,0.55)] transition-all duration-300 cursor-pointer shrink-0"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -401,30 +484,42 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
         </div>
 
         {/* Bottom Footer Bar */}
-        <div className="flex flex-col min-[520px]:flex-row min-[520px]:items-center justify-between gap-2.5 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 [@media(max-height:540px)]:py-2 border-t border-white/10 bg-[#0d111a] shrink-0">
-          {/* Compact Weather Selector */}
+        <div className="flex flex-col min-[520px]:flex-row min-[520px]:items-center justify-between gap-2.5 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 [@media(max-height:540px)]:py-2 border-t border-white/10 bg-[#0d111a]/75 backdrop-blur-md shrink-0">
+
+          {/* Weather Selector */}
           <div className="flex items-center gap-2">
-            <span id="map-weather-label" className="text-xs font-medium text-slate-400 shrink-0">
+            <span
+              id="map-weather-label"
+              className="text-xs font-medium text-slate-300 shrink-0"
+            >
               Weather
             </span>
+
             <div
               role="group"
               aria-labelledby="map-weather-label"
-              className="inline-flex items-center gap-1 p-1 rounded-lg bg-[#141925] border border-white/10"
+              className="inline-flex items-center gap-1 p-1 rounded-lg bg-[#141925]/90 border border-white/10"
             >
               {WEATHER_PRESETS.map((preset) => {
                 const active = weather === preset.id;
-                const Icon = preset.id === 'sunny' ? Sun : preset.id === 'rainy' ? CloudRain : Moon;
+
+                const Icon =
+                  preset.id === 'sunny'
+                    ? Sun
+                    : preset.id === 'rainy'
+                      ? CloudRain
+                      : Moon;
+
                 return (
                   <button
                     key={preset.id}
                     type="button"
                     aria-pressed={active}
                     onClick={() => onSelectWeather(preset.id)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 [@media(max-height:540px)]:py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 [@media(max-height:540px)]:py-1 rounded-md text-xs font-semibold transition-all duration-300 cursor-pointer whitespace-nowrap ${
                       active
-                        ? 'bg-[#ff4d2e]/20 text-white border border-[#ff4d2e]/70'
-                        : 'text-slate-300 hover:text-white border border-transparent'
+                        ? 'bg-[#ff4d2e]/20 text-white border border-[#ff4d2e]/70 shadow-[0_0_12px_rgba(255,77,46,0.35)]'
+                        : 'text-slate-300 hover:text-white border border-transparent hover:border-orange-400/40 hover:bg-orange-500/10 hover:shadow-[0_0_12px_rgba(255,77,46,0.25)]'
                     }`}
                   >
                     <Icon
@@ -436,6 +531,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                             : 'text-indigo-300'
                       }`}
                     />
+
                     <span>{preset.label}</span>
                   </button>
                 );
@@ -443,10 +539,11 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
             </div>
           </div>
 
+          {/* Return to Main Menu */}
           <button
             type="button"
             onClick={onClose}
-            className="w-full min-[520px]:w-auto px-5 sm:px-6 py-2.5 sm:py-3 [@media(max-height:540px)]:py-2 rounded-lg bg-[#ff4d2e] hover:bg-[#e83f22] text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-[0_6px_20px_rgba(255,77,46,0.28)] transition-colors cursor-pointer whitespace-nowrap"
+            className="w-full min-[520px]:w-auto px-5 sm:px-6 py-2.5 sm:py-3 [@media(max-height:540px)]:py-2 rounded-lg bg-[#ff4d2e] hover:bg-[#ff603d] text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-[0_0_12px_rgba(255,77,46,0.45),0_0_30px_rgba(255,77,46,0.25)] hover:shadow-[0_0_18px_rgba(255,77,46,0.75),0_0_42px_rgba(255,77,46,0.4)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer whitespace-nowrap"
           >
             Return to Main Menu
           </button>

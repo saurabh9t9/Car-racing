@@ -302,6 +302,7 @@ async function bootstrap() {
   );
   app.use(express.json({ limit: '1mb' }));
 
+
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, rooms: rooms.size, tracks: listTracks().length });
   });
@@ -571,7 +572,7 @@ async function bootstrap() {
   }
 
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`Slipstream Ram server running on http://localhost:${PORT}`);
+    console.log(`Turbo Drifter server running on http://localhost:${PORT}`);
   });
 }
 

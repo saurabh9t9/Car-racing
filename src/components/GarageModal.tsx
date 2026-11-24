@@ -109,7 +109,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
       map[m.id] = getCarPerformanceSummary(buildModelConfig(car, m));
     }
     return map;
-  }, [car.stats]);
+  }, [car.stats.speed, car.stats.accel, car.stats.handling, car.stats.ram, car.modelId]);
 
   const activeSummary =
     summariesById[activeSpec.id] ?? getCarPerformanceSummary(buildModelConfig(car, activeSpec));
@@ -162,7 +162,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  });
+  }, [filteredModels, selectedIndex, onClose]);
 
   const usedPoints = car.stats.speed + car.stats.accel + car.stats.handling + car.stats.ram;
   const remaining = STAT_BUDGET - usedPoints;

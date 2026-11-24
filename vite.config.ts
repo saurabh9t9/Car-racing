@@ -15,10 +15,7 @@ export default defineConfig(() => {
       {
         name: 'copy-unbundled-src-assets',
         apply: 'build' as const,
-        closeBundle(error?: Error): void {
-          if (error) {
-            return;
-          }
+        closeBundle(): void {
           const distDir = path.resolve(import.meta.dirname, 'dist');
           const srcAssets = path.resolve(import.meta.dirname, 'src/assets');
           const distAssets = path.resolve(distDir, 'src/assets');

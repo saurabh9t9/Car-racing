@@ -3,11 +3,13 @@
 @source "./components";
 @custom-variant short-landscape (@media (max-height: 540px) and (min-width: 560px));
 
+
 @layer base {
   :root {
     --font-display: 'Oxanium', sans-serif;
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+
     --safe-top: env(safe-area-inset-top, 0px);
     --safe-right: env(safe-area-inset-right, 0px);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -18,7 +20,8 @@
   body,
   #root {
     width: 100%;
-    height: 100dvh;
+    height: 100%;
+    min-height: 100%;
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -29,6 +32,33 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     user-select: none;
+  }
+
+  html {
+    height: 100%;
+    background-color: #11151c;
+  }
+
+  body {
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+    touch-action: manipulation;
+  }
+
+  #root {
+    height: 100dvh;
+    min-height: 100dvh;
+    position: relative;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+  }
+
+  input,
+  textarea {
+    user-select: text;
   }
 }
 

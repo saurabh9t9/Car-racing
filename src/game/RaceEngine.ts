@@ -398,22 +398,36 @@ export class RaceEngine {
     const maskData = mctx.getImageData(0, 0, 1024, 320).data;
 
     const step = 7;
-    for (let y = 4; y < 320; y += step) {
-      for (let x = 4; x < 1024; x += step) {
-        const idx = (y * 1024 + x) * 4 + 3;
-        const alpha = maskData[idx] / 255;
-        if (alpha > 0.12) {
-          const r = 2.45 * (0.45 + alpha * 0.55);
-          const dx = (x - 512) / 512;
-          const dy = (y - 165) / 160;
-          const falloff = Math.max(0.42, 1 - Math.sqrt(dx * dx + dy * dy) * 0.42);
-          ctx.fillStyle = `rgba(6, 4, 3, ${(0.84 * falloff).toFixed(3)})`;
-          ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
+
+for (let y = 4; y < 320; y += step) {
+  for (let x = 4; x < 1024; x += step) {
+    const idx = (y * 1024 + x) * 4 + 3;
+    const alpha = maskData[idx] / 255;
+
+    if (alpha > 0.12) {
+      const r = 2.45 * (0.45 + alpha * 0.55);
+
+      const dx = (x - 512) / 512;
+      const dy = (y - 165) / 160;
+      const falloff = Math.max(
+        0.42,
+        1 - Math.sqrt(dx * dx + dy * dy) * 0.42
+      );
+
+      // Subtle dark-red ink underneath
+      ctx.fillStyle = `rgba(251, 119, 3, ${(0.35 * falloff).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(x + 0.7, y + 0.7, r * 1.12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Main orange printed ink
+      ctx.fillStyle = `rgba(196, 75, 27, ${(0.88 * falloff).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
     }
+  }
+}
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
@@ -542,7 +556,7 @@ export class RaceEngine {
     this.scene.add(this.garageGroup);
 
     const bgLoader = new THREE.TextureLoader();
-    bgLoader.load('/assets/aistudio/wmremove-transformed_ffa200f4.webp', (tex) => {
+    bgLoader.load('/assets/aistudio/garagebg.webp', (tex) => {
       if (this.disposed) {
         tex.dispose();
         return;
