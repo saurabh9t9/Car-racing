@@ -1,0 +1,823 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLB Model Gallery</title>
+
+<style>
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #080d18;
+    color: white;
+    font-family: Arial, sans-serif;
+}
+
+header {
+    padding: 22px;
+    text-align: center;
+    background: #111a2b;
+    border-bottom: 1px solid #29374d;
+}
+
+header p {
+    color: #94a3b8;
+}
+
+.toolbar {
+    padding: 18px;
+    text-align: center;
+}
+
+button {
+    padding: 11px 18px;
+    border: none;
+    border-radius: 7px;
+    background: #2563eb;
+    color: white;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #1d4ed8;
+}
+
+#status {
+    margin-top: 12px;
+    color: #a5b4fc;
+    font-size: 13px;
+}
+
+#gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 18px;
+    padding: 18px;
+}
+
+.card {
+    min-width: 0;
+    overflow: hidden;
+    background: #111a2b;
+    border: 1px solid #29374d;
+    border-radius: 12px;
+}
+
+.viewer {
+    height: 250px;
+    position: relative;
+    overflow: hidden;
+    background: #17243a;
+}
+
+.viewer canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.info {
+    padding: 14px;
+}
+
+.name {
+    font-size: 14px;
+    font-weight: bold;
+    overflow-wrap: anywhere;
+}
+
+.state {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #94a3b8;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+
+.state.success {
+    color: #86efac;
+}
+
+.state.error {
+    color: #fca5a5;
+}
+
+.progress-track {
+    height: 4px;
+    margin-top: 10px;
+    background: #29374d;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background: #3b82f6;
+    transition: width 0.2s;
+}
+
+.empty {
+    grid-column: 1 / -1;
+    padding: 60px 20px;
+    text-align: center;
+    color: #94a3b8;
+}
+
+@media(max-width: 600px) {
+    #gallery {
+        grid-template-columns: 1fr;
+        padding: 12px;
+    }
+}
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+
+<body>
+
+<header>
+    <h2>3D GLB Model Gallery</h2>
+    <p>Automatically detect and preview your GLB models</p>
+</header>
+
+<div class="toolbar">
+    <button id="scanButton">Choose Folder & Scan</button>
+    <div id="status">Choose your model folder to begin.</div>
+</div>
+
+<div id="gallery">
+    <div class="empty">
+        Your GLB models will appear here.
+    </div>
+</div>
+
+<script type="module">
+
+import * as THREE from "three";
+
+import { GLTFLoader } from
+"three/addons/loaders/GLTFLoader.js";
+
+import { DRACOLoader } from
+"three/addons/loaders/DRACOLoader.js";
+
+import { OrbitControls } from
+"three/addons/controls/OrbitControls.js";
+
+import { MeshoptDecoder } from
+"three/addons/libs/meshopt_decoder.module.js";
+
+import { KTX2Loader } from
+"three/addons/loaders/KTX2Loader.js";
+
+
+const gallery = document.getElementById("gallery");
+const status = document.getElementById("status");
+const scanButton = document.getElementById("scanButton");
+
+const DRACO_PATH =
+"https://www.gstatic.com/draco/versioned/decoders/1.5.7/";
+
+const KTX2_PATH =
+"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/basis/";
+
+const MAX_SIMULTANEOUS_LOADS = 2;
+
+let folderHandle = null;
+let entries = [];
+let loadingQueue = [];
+let activeLoads = 0;
+let animationId = null;
+
+
+/* --------------------------------------------------
+   SHARED DRACO DECODER
+-------------------------------------------------- */
+
+const dracoLoader = new DRACOLoader();
+
+dracoLoader.setDecoderPath(DRACO_PATH);
+
+dracoLoader.setDecoderConfig({
+    type: "js"
+});
+
+dracoLoader.preload();
+
+
+/* --------------------------------------------------
+   LIGHTING
+-------------------------------------------------- */
+
+function addLighting(scene) {
+
+    const ambient = new THREE.HemisphereLight(
+        0xffffff,
+        0x526078,
+        2
+    );
+
+    scene.add(ambient);
+
+    const mainLight = new THREE.DirectionalLight(
+        0xffffff,
+        2.5
+    );
+
+    mainLight.position.set(5, 10, 7);
+    scene.add(mainLight);
+
+    const fillLight = new THREE.DirectionalLight(
+        0x8bbcff,
+        1
+    );
+
+    fillLight.position.set(-5, 3, -5);
+    scene.add(fillLight);
+}
+
+
+/* --------------------------------------------------
+   CREATE CARD
+-------------------------------------------------- */
+
+function createCard(file) {
+
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const viewer = document.createElement("div");
+    viewer.className = "viewer";
+
+    const info = document.createElement("div");
+    info.className = "info";
+
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = file.name;
+
+    const state = document.createElement("div");
+    state.className = "state";
+    state.textContent = "Waiting to load...";
+
+    const progressTrack = document.createElement("div");
+    progressTrack.className = "progress-track";
+
+    const progressBar = document.createElement("div");
+    progressBar.className = "progress-bar";
+
+    progressTrack.appendChild(progressBar);
+
+    info.append(name, state, progressTrack);
+    card.append(viewer, info);
+
+    gallery.appendChild(card);
+
+    return {
+        file,
+        card,
+        viewer,
+        state,
+        progressBar,
+        scene: null,
+        camera: null,
+        renderer: null,
+        controls: null,
+        model: null,
+        loaded: false,
+        loading: false,
+        failed: false,
+        visible: false,
+        resizeObserver: null
+    };
+}
+
+
+/* --------------------------------------------------
+   ERROR MESSAGE
+-------------------------------------------------- */
+
+function getErrorMessage(error) {
+
+    const message =
+        error?.message ||
+        error?.target?.statusText ||
+        String(error);
+
+    if (/draco|decoder/i.test(message)) {
+        return "Compression decoder error. Check Draco support.";
+    }
+
+    if (/meshopt/i.test(message)) {
+        return "Meshopt decoding error.";
+    }
+
+    if (/ktx2|basis/i.test(message)) {
+        return "Compressed texture error. Check KTX2 support.";
+    }
+
+    if (/memory|context lost/i.test(message)) {
+        return "GPU memory issue. Try loading fewer models.";
+    }
+
+    return message;
+}
+
+
+/* --------------------------------------------------
+   CREATE VIEWER
+-------------------------------------------------- */
+
+function createViewer(entry) {
+
+    if (entry.renderer) return;
+
+    const container = entry.viewer;
+
+    const width = container.clientWidth || 300;
+    const height = container.clientHeight || 250;
+
+    const scene = new THREE.Scene();
+
+    scene.background = new THREE.Color(0x17243a);
+
+    const camera = new THREE.PerspectiveCamera(
+        45,
+        width / height,
+        0.01,
+        10000
+    );
+
+    camera.position.set(4, 3, 5);
+
+    const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: false,
+        powerPreference: "low-power"
+    });
+
+    renderer.setPixelRatio(
+        Math.min(window.devicePixelRatio || 1, 1.5)
+    );
+
+    renderer.setSize(width, height);
+
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+    renderer.toneMappingExposure = 1.2;
+
+    container.appendChild(renderer.domElement);
+
+    addLighting(scene);
+
+    const controls = new OrbitControls(
+        camera,
+        renderer.domElement
+    );
+
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+
+    entry.scene = scene;
+    entry.camera = camera;
+    entry.renderer = renderer;
+    entry.controls = controls;
+
+    if (entry.model) {
+        scene.add(entry.model);
+        frameModel(entry);
+    }
+
+    entry.resizeObserver = new ResizeObserver(() => {
+
+        if (!entry.renderer) return;
+
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+
+        if (!w || !h) return;
+
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(w, h);
+    });
+
+    entry.resizeObserver.observe(container);
+}
+
+
+/* --------------------------------------------------
+   POSITION MODEL
+-------------------------------------------------- */
+
+function frameModel(entry) {
+
+    const model = entry.model;
+
+    const box = new THREE.Box3().setFromObject(model);
+
+    const size = box.getSize(new THREE.Vector3());
+
+    const center = box.getCenter(new THREE.Vector3());
+
+    model.position.sub(center);
+
+    const maxDimension = Math.max(
+        size.x,
+        size.y,
+        size.z
+    );
+
+    const distance = Math.max(maxDimension * 1.8, 1);
+
+    entry.camera.position.set(
+        distance,
+        distance * 0.7,
+        distance
+    );
+
+    entry.camera.near = Math.max(maxDimension / 1000, 0.001);
+
+    entry.camera.far = Math.max(maxDimension * 100, 1000);
+
+    entry.camera.updateProjectionMatrix();
+
+    entry.controls.target.set(0, 0, 0);
+
+    entry.controls.minDistance = Math.max(
+        maxDimension * 0.15,
+        0.01
+    );
+
+    entry.controls.maxDistance = Math.max(
+        maxDimension * 10,
+        10
+    );
+
+    entry.controls.update();
+}
+
+
+/* --------------------------------------------------
+   LOAD MODEL WITH ALL DECODERS
+-------------------------------------------------- */
+
+async function loadModel(entry) {
+
+    if (entry.loading || entry.loaded || entry.failed) return;
+
+    entry.loading = true;
+
+    entry.state.textContent = "Loading model...";
+
+    entry.progressBar.style.width = "0%";
+
+    try {
+
+        createViewer(entry);
+
+        const ktx2Loader = new KTX2Loader();
+
+        ktx2Loader.setTranscoderPath(KTX2_PATH);
+
+        ktx2Loader.detectSupport(entry.renderer);
+
+        const loader = new GLTFLoader();
+
+        loader.setDRACOLoader(dracoLoader);
+
+        loader.setMeshoptDecoder(MeshoptDecoder);
+
+        loader.setKTX2Loader(ktx2Loader);
+
+        const objectURL = URL.createObjectURL(entry.file);
+
+        try {
+
+            const gltf = await new Promise((resolve, reject) => {
+
+                loader.load(
+                    objectURL,
+                    resolve,
+                    progress => {
+
+                        if (progress.total > 0) {
+
+                            const percent = Math.round(
+                                progress.loaded / progress.total * 100
+                            );
+
+                            entry.progressBar.style.width =
+                                percent + "%";
+
+                            entry.state.textContent =
+                                "Loading: " + percent + "%";
+                        }
+                    },
+                    reject
+                );
+
+            });
+
+            entry.model = gltf.scene;
+
+            entry.scene.add(entry.model);
+
+            frameModel(entry);
+
+            entry.loaded = true;
+
+            entry.failed = false;
+
+            entry.progressBar.style.width = "100%";
+
+            entry.state.textContent = "Loaded successfully";
+
+            entry.state.className = "state success";
+
+            console.log("MODEL LOADED:", entry.file.name);
+
+        } finally {
+
+            URL.revokeObjectURL(objectURL);
+
+            ktx2Loader.dispose();
+        }
+
+    } catch (error) {
+
+        entry.failed = true;
+
+        entry.state.textContent =
+            "Failed: " + getErrorMessage(error);
+
+        entry.state.className = "state error";
+
+        console.error(
+            "MODEL FAILED:",
+            entry.file.name,
+            error
+        );
+
+        entry.progressBar.style.background = "#ef4444";
+
+    } finally {
+
+        entry.loading = false;
+
+        processQueue();
+    }
+}
+
+
+/* --------------------------------------------------
+   CONTROL LOADING QUEUE
+-------------------------------------------------- */
+
+function processQueue() {
+
+    while (
+        activeLoads < MAX_SIMULTANEOUS_LOADS &&
+        loadingQueue.length > 0
+    ) {
+
+        const entry = loadingQueue.shift();
+
+        if (
+            entry.loading ||
+            entry.loaded ||
+            entry.failed
+        ) {
+            continue;
+        }
+
+        activeLoads++;
+
+        loadModel(entry).finally(() => {
+            activeLoads--;
+            processQueue();
+        });
+    }
+}
+
+function queueModel(entry) {
+
+    if (
+        entry.loaded ||
+        entry.loading ||
+        entry.failed
+    ) return;
+
+    if (!loadingQueue.includes(entry)) {
+        loadingQueue.push(entry);
+    }
+
+    processQueue();
+}
+
+
+/* --------------------------------------------------
+   LAZY LOADING
+   Only nearby/visible cards create WebGL viewers.
+-------------------------------------------------- */
+
+const observer = new IntersectionObserver(
+    (items) => {
+
+        items.forEach(item => {
+
+            const entry = entries.find(
+                e => e.card === item.target
+            );
+
+            if (!entry) return;
+
+            entry.visible = item.isIntersecting;
+
+            if (item.isIntersecting) {
+
+                if (!entry.loaded) {
+                    queueModel(entry);
+                } else if (!entry.renderer) {
+                    createViewer(entry);
+                }
+            } else if (entry.renderer) {
+
+                // Release the WebGL context for offscreen cards.
+                // The loaded model remains available in memory.
+                entry.resizeObserver?.disconnect();
+
+                entry.controls.dispose();
+
+                entry.renderer.dispose();
+
+                entry.renderer.forceContextLoss();
+
+                entry.renderer.domElement.remove();
+
+                entry.renderer = null;
+                entry.controls = null;
+                entry.camera = null;
+                entry.scene = null;
+                entry.resizeObserver = null;
+            }
+        });
+    },
+    {
+        root: null,
+        rootMargin: "250px",
+        threshold: 0.01
+    }
+);
+
+
+/* --------------------------------------------------
+   ANIMATION
+-------------------------------------------------- */
+
+function animate() {
+
+    animationId = requestAnimationFrame(animate);
+
+    entries.forEach(entry => {
+
+        if (
+            !entry.visible ||
+            !entry.renderer ||
+            !entry.scene ||
+            !entry.camera
+        ) return;
+
+        entry.controls.update();
+
+        entry.renderer.render(
+            entry.scene,
+            entry.camera
+        );
+    });
+}
+
+
+/* --------------------------------------------------
+   SCAN FOLDER
+-------------------------------------------------- */
+
+async function scanFolder() {
+
+    try {
+
+        if (!window.showDirectoryPicker) {
+
+            throw new Error(
+                "Use Chrome or Edge and open this HTML through localhost or HTTPS."
+            );
+        }
+
+        folderHandle = await window.showDirectoryPicker();
+
+        observer.disconnect();
+
+        loadingQueue = [];
+
+        entries.forEach(entry => {
+
+            entry.resizeObserver?.disconnect();
+
+            entry.controls?.dispose();
+
+            entry.renderer?.dispose();
+
+            entry.renderer?.forceContextLoss();
+        });
+
+        entries = [];
+
+        gallery.innerHTML = "";
+
+        status.textContent = "Scanning folder...";
+
+        const files = [];
+
+        for await (
+            const [name, handle] of folderHandle.entries()
+        ) {
+
+            if (
+                handle.kind === "file" &&
+                /\.glb$/i.test(name)
+            ) {
+
+                const file = await handle.getFile();
+
+                files.push(file);
+            }
+        }
+
+        files.sort((a, b) =>
+            a.name.localeCompare(b.name)
+        );
+
+        if (files.length === 0) {
+
+            gallery.innerHTML =
+                '<div class="empty">No GLB files found.</div>';
+
+            status.textContent = "No models found.";
+
+            return;
+        }
+
+        files.forEach(file => {
+
+            const entry = createCard(file);
+
+            entries.push(entry);
+
+            observer.observe(entry.card);
+        });
+
+        status.textContent =
+            `${files.length} GLB models found. Scroll to load models.`;
+
+        console.log("DETECTED MODELS:", files);
+
+    } catch (error) {
+
+        if (error.name === "AbortError") return;
+
+        status.textContent = error.message;
+
+        console.error(error);
+    }
+}
+
+
+/* --------------------------------------------------
+   START
+-------------------------------------------------- */
+
+scanButton.addEventListener("click", scanFolder);
+
+animate();
+
+</script>
+
+</body>
+</html>

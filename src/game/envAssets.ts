@@ -5,7 +5,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import type { TrackTheme } from '../shared/types';
 
 export type EnvModelId =
-  | 'overhead_lights'
+  | 'race_drag_start_and_finish_line'
   | 'grandstand_covered'
   | 'pits_garage'
   | 'pits_office'
@@ -29,7 +29,22 @@ export type EnvModelId =
   | 'skyscraper_a'
   | 'skyscraper_b'
   | 'skyscraper_c'
-  | 'building_a';
+  | 'building_a'
+  | 'env_spruce_trees'
+  | 'env_lowpoly_tree'
+  | 'env_cherry_blossom'
+  | 'env_stylized_rocks'
+  | 'env_palm_tree'
+  | 'env_dry_tree'
+  | 'env_dry_grass'
+  | 'sakura_statue'
+  | 'sakura_cherry_trees'
+  | 'sakura_chinese_architecture'
+  | 'sakura_fantasy_architecture'
+  | 'sakura_chinese_hall'
+  | 'sakura_japanese_temple'
+  | 'sakura_lamp_pagoda'
+  | 'sakura_drum';
 
 interface EnvModelSpec {
   id: EnvModelId;
@@ -49,7 +64,7 @@ interface EnvModelSpec {
 }
 
 const ENV_MODEL_SPECS: EnvModelSpec[] = [
-  { id: 'overhead_lights', file: '/models/env/overhead_lights.glb', targetHeight: 11.5, variant: 'gantry' },
+  { id: 'race_drag_start_and_finish_line', file: '/models/env/race_drag_start_and_finish_line.glb', targetHeight: 11.5, variant: 'gantry' },
   { id: 'grandstand_covered', file: '/models/env/grandstand_covered.glb', targetHeight: 10.5, variant: 'racing_prop' },
   { id: 'pits_garage', file: '/models/env/pits_garage.glb', targetHeight: 7.2, variant: 'racing_prop' },
   { id: 'pits_office', file: '/models/env/pits_office.glb', targetHeight: 10.5, variant: 'racing_prop' },
@@ -74,6 +89,23 @@ const ENV_MODEL_SPECS: EnvModelSpec[] = [
   { id: 'skyscraper_b', file: '/models/env/skyscraper_b.glb', targetHeight: 48.0, variant: 'night_city' },
   { id: 'skyscraper_c', file: '/models/env/skyscraper_c.glb', targetHeight: 42.0, variant: 'night_city' },
   { id: 'building_a', file: '/models/env/building_a.glb', targetHeight: 19.0, variant: 'night_city' },
+  { id: 'env_spruce_trees', file: '/models/env/trees/spruce_trees.glb', targetHeight: 12, variant: 'alpine_tree',},
+  { id: 'env_lowpoly_tree', file: '/models/env/trees/tree_low_poly_lowpoly.glb', targetHeight: 9, variant: 'alpine_tree',},
+  { id: 'env_cherry_blossom', file: '/models/env/trees/cherry_blossom_trees.glb', targetHeight: 10, variant: 'default',},
+  { id: 'env_stylized_rocks', file: '/models/env/rocks/stylized_rocks.glb', targetHeight: 4, variant: 'alpine_rock',},
+  { id: 'env_palm_tree', file: '/models/env/trees/palm_tree_tall.glb', targetHeight: 11, variant: 'default',},
+  { id: 'env_dry_tree', file: '/models/env/trees/dry_tree_vurvur_house_5.glb', targetHeight: 8, variant: 'default',},
+  { id: 'env_dry_grass', file: '/models/env/trees/dry_realistic_grass_lods_1.glb', targetHeight: 2, variant: 'default',},
+
+  // Sakura Pass assets: exact folder/file names from the supplied asset browser.
+  { id: 'sakura_statue', file: '/models/env/sakura%20pass/2ff77d68adf6448a936fa1b1575133cb.glb', targetHeight: 3.2, variant: 'default' },
+  { id: 'sakura_cherry_trees', file: '/models/env/sakura%20pass/cherry_blossom_trees.glb', targetHeight: 12.0, variant: 'default' },
+  { id: 'sakura_chinese_architecture', file: '/models/env/sakura%20pass/chinese_architecture.glb', targetHeight: 11.0, variant: 'racing_prop' },
+  { id: 'sakura_fantasy_architecture', file: '/models/env/sakura%20pass/chinese_fantasy_03_-_revisited.glb', targetHeight: 18.0, variant: 'racing_prop' },
+  { id: 'sakura_chinese_hall', file: '/models/env/sakura%20pass/chinese_hall.glb', targetHeight: 15.0, variant: 'racing_prop' },
+  { id: 'sakura_japanese_temple', file: '/models/env/sakura%20pass/japanese_lowpoly_temple.glb', targetHeight: 18.0, variant: 'racing_prop' },
+  { id: 'sakura_lamp_pagoda', file: '/models/env/sakura%20pass/japanese_wooden_lamp_pagoda.glb', targetHeight: 6.5, variant: 'racing_prop' },
+  { id: 'sakura_drum', file: '/models/env/sakura%20pass/maybe_ip_drum.glb', targetHeight: 5.0, variant: 'racing_prop' },
 ];
 
 export interface EnvMeshPart {
@@ -350,6 +382,10 @@ function normalizeEnvModel(
 ): NormalizedEnvAsset {
   const wrapper = new THREE.Group();
   const inner = sceneRoot;
+
+  if (spec.id === 'race_drag_start_and_finish_line') {
+  inner.rotation.y = Math.PI / 2;
+}
 
   inner.traverse((obj) => {
     if ((obj as THREE.Mesh).isMesh) {

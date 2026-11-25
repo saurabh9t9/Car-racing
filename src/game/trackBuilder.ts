@@ -692,8 +692,8 @@ export function buildTrackScene(
   checkerStrip.receiveShadow = true;
   group.add(checkerStrip);
 
-  const gantryAsset = getEnvAsset('overhead_lights');
-  const gantryModel = cloneEnvAssetGroup('overhead_lights');
+  const gantryAsset = getEnvAsset('race_drag_start_and_finish_line');
+  const gantryModel = cloneEnvAssetGroup('race_drag_start_and_finish_line');
   if (gantryModel && gantryAsset) {
     const desiredSpan = track.def.roadWidth + 7.2;
     const xScale = desiredSpan / Math.max(gantryAsset.size.x, 1);
@@ -805,211 +805,526 @@ export function buildTrackScene(
     obstacleMeshes.set(obs.id, mesh);
   }
 
-  // 8. Real .GLB Trackside Biome Scenery (Safe outside road + paddock corridor)
-  const placements: Array<{ x: number; z: number; scale: number; rot: number; seed: number }> = [];
-  let attempt = 0;
-  while (placements.length < 96 && attempt < 950) {
-    attempt++;
-    const angle = (attempt * 2.39996) % (Math.PI * 2);
-    const radius = 34 + ((attempt * 23.7) % 245);
-    const px = Math.cos(angle) * radius;
-    const pz = Math.sin(angle) * radius;
+    // 8. Real .GLB Trackside Biome Scenery
+  const placements: Array<{
+    x: number;
+    z: number;
+    scale: number;
+    rot: number;
+    seed: number;
+  }> = [];
 
-    let minDistSq = Infinity;
-    for (let k = 0; k < track.samples.length; k += 2) {
-      const s = track.samples[k];
-      const dx = px - s.x;
-      const dz = pz - s.z;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < minDistSq) minDistSq = d2;
+  const isSakura = track.def.theme === 'sakura';
+
+  // Sakura gets dense, track-following scenery.
+  // All other themes, including Midnight, use the original placement pattern.
+  if (isSakura) {
+    const stationCount = 72;
+    const laneOffsets = [19, 29, 41, 56];
+
+    let seed = 0;
+
+    for (let station = 0; station < stationCount; station++) {
+      const t = station / stationCount;
+      const s = sampleTrackAt(track, t);
+
+      for (const side of [-1, 1]) {
+        for (let lane = 0; lane < laneOffsets.length; lane++) {
+          seed++;
+
+          const jitter = ((seed * 17.17) % 5.5) - 2.75;
+          const lateral = side * (halfW + laneOffsets[lane] + jitter);
+
+          placements.push({
+            x: s.x + s.nx * lateral,
+            z: s.z + s.nz * lateral,
+            scale: 0.88 + ((seed * 0.31) % 0.42),
+            rot: (seed * 2.39996) % (Math.PI * 2),
+            seed,
+          });
+        }
+      }
     }
-    const safeDist = halfW + 17.5;
-    if (minDistSq < safeDist * safeDist) continue;
+  } else {
+    // Original general scenery placement pattern.
+    let attempt = 0;
 
-    placements.push({
-      x: px,
-      z: pz,
-      scale: 0.85 + ((attempt * 0.37) % 0.65),
-      rot: (attempt * 1.13) % (Math.PI * 2),
-      seed: attempt,
-    });
+    while (placements.length < 96 && attempt < 950) {
+      attempt++;
+
+      const angle = (attempt * 2.39996) % (Math.PI * 2);
+      const radius = 34 + ((attempt * 23.7) % 245);
+
+      const px = Math.cos(angle) * radius;
+      const pz = Math.sin(angle) * radius;
+
+      let minDistSq = Infinity;
+
+      for (let k = 0; k < track.samples.length; k += 2) {
+        const s = track.samples[k];
+
+        const dx = px - s.x;
+        const dz = pz - s.z;
+        const d2 = dx * dx + dz * dz;
+
+        if (d2 < minDistSq) {
+          minDistSq = d2;
+        }
+      }
+
+      const safeDist = halfW + 17.5;
+
+      if (minDistSq < safeDist * safeDist) continue;
+
+      placements.push({
+        x: px,
+        z: pz,
+        scale: 0.85 + ((attempt * 0.37) % 0.65),
+        rot: (attempt * 1.13) % (Math.PI * 2),
+        seed: attempt,
+      });
+    }
   }
 
   if (placements.length > 0) {
+    // ---------------------------------------------------------
+    // ALPINE
+    // ---------------------------------------------------------
     if (track.def.theme === 'alpine') {
-      const pineTallA: SceneryPlacement[] = [];
-      const pineTallB: SceneryPlacement[] = [];
-      const pineRound: SceneryPlacement[] = [];
+      const spruceTrees: SceneryPlacement[] = [];
+      const lowPolyTrees: SceneryPlacement[] = [];
       const rocks: SceneryPlacement[] = [];
 
       placements.forEach((pl, idx) => {
-        const mod = idx % 4;
-        if (mod === 0) pineTallA.push({ x: pl.x, z: pl.z, scale: pl.scale, rotY: pl.rot });
-        else if (mod === 1) pineTallB.push({ x: pl.x, z: pl.z, scale: pl.scale, rotY: pl.rot });
-        else if (mod === 2) pineRound.push({ x: pl.x, z: pl.z, scale: pl.scale, rotY: pl.rot });
-        else {
-          pineTallA.push({ x: pl.x, z: pl.z, scale: pl.scale * 0.9, rotY: pl.rot });
+        const mod = idx % 5;
+
+        if (mod === 0 || mod === 2 || mod === 4) {
+          spruceTrees.push({
+            x: pl.x,
+            z: pl.z,
+            scale: pl.scale,
+            rotY: pl.rot,
+          });
+        } else if (mod === 1) {
+          lowPolyTrees.push({
+            x: pl.x,
+            z: pl.z,
+            scale: pl.scale * 0.92,
+            rotY: pl.rot,
+          });
+        } else {
           rocks.push({
-            x: pl.x + Math.cos(pl.rot) * 3.4,
-            z: pl.z + Math.sin(pl.rot) * 3.4,
-            scale: pl.scale * 1.15,
+            x: pl.x + Math.cos(pl.rot) * 2.8,
+            z: pl.z + Math.sin(pl.rot) * 2.8,
+            scale: pl.scale * 1.1,
             rotY: pl.rot * 0.7,
           });
         }
       });
 
-      addInstancedGlbProps(group, 'pine_tall_a', pineTallA);
-      addInstancedGlbProps(group, 'pine_tall_b', pineTallB);
-      addInstancedGlbProps(group, 'pine_round', pineRound);
-      addInstancedGlbProps(group, 'rock_large', rocks);
-    } else if (track.def.theme === 'sunset') {
-      const canyonTall: SceneryPlacement[] = [];
-      const canyonCliff: SceneryPlacement[] = [];
-      const canyonRock: SceneryPlacement[] = [];
-      const cactusTall: SceneryPlacement[] = [];
-      const cactusShort: SceneryPlacement[] = [];
+      const hasSpruce = addInstancedGlbProps(
+        group,
+        'env_spruce_trees',
+        spruceTrees,
+      );
+
+      const hasLowPoly = addInstancedGlbProps(
+        group,
+        'env_lowpoly_tree',
+        lowPolyTrees,
+      );
+
+      const hasRocks = addInstancedGlbProps(
+        group,
+        'env_stylized_rocks',
+        rocks,
+      );
+
+      if (!hasSpruce) {
+        addInstancedGlbProps(group, 'pine_tall_a', spruceTrees);
+      }
+
+      if (!hasLowPoly) {
+        addInstancedGlbProps(group, 'pine_round', lowPolyTrees);
+      }
+
+      if (!hasRocks) {
+        addInstancedGlbProps(group, 'rock_large', rocks);
+      }
+    }
+
+    // ---------------------------------------------------------
+    // SUNSET
+    // ---------------------------------------------------------
+    else if (track.def.theme === 'sunset') {
+      const dryTrees: SceneryPlacement[] = [];
+      const dryGrass: SceneryPlacement[] = [];
+      const canyonRocks: SceneryPlacement[] = [];
 
       placements.forEach((pl, idx) => {
         const mod = idx % 5;
-        if (mod === 0) canyonTall.push({ x: pl.x, z: pl.z, scale: pl.scale * 1.05, rotY: pl.rot });
-        else if (mod === 1) canyonCliff.push({ x: pl.x, z: pl.z, scale: pl.scale * 1.1, rotY: pl.rot });
-        else if (mod === 2) canyonRock.push({ x: pl.x, z: pl.z, scale: pl.scale, rotY: pl.rot });
-        else if (mod === 3) {
-          cactusTall.push({ x: pl.x, z: pl.z, scale: pl.scale, rotY: pl.rot });
-          canyonRock.push({
-            x: pl.x + Math.cos(pl.rot) * 4.2,
-            z: pl.z + Math.sin(pl.rot) * 4.2,
-            scale: pl.scale * 0.75,
+
+        if (mod === 0 || mod === 2) {
+          dryTrees.push({
+            x: pl.x,
+            z: pl.z,
+            scale: pl.scale * 0.95,
+            rotY: pl.rot,
+          });
+        } else if (mod === 1 || mod === 4) {
+          dryGrass.push({
+            x: pl.x,
+            z: pl.z,
+            scale: pl.scale * 0.85,
             rotY: pl.rot,
           });
         } else {
-          cactusShort.push({ x: pl.x, z: pl.z, scale: pl.scale, rotY: pl.rot });
+          canyonRocks.push({
+            x: pl.x,
+            z: pl.z,
+            scale: pl.scale * 1.1,
+            rotY: pl.rot,
+          });
         }
       });
 
-      addInstancedGlbProps(group, 'canyon_tall', canyonTall);
-      addInstancedGlbProps(group, 'canyon_cliff', canyonCliff);
-      addInstancedGlbProps(group, 'canyon_rock', canyonRock);
-      addInstancedGlbProps(group, 'cactus_tall', cactusTall);
-      addInstancedGlbProps(group, 'cactus_short', cactusShort);
-    } else if (track.def.theme === 'coastal') {
-      // Pacific Coastline: Mediterranean pines, coastal evergreens & limestone boulders
-      const pineRound: SceneryPlacement[] = [];
-      const pineTallA: SceneryPlacement[] = [];
-      const pineTallB: SceneryPlacement[] = [];
-      const rocks: SceneryPlacement[] = [];
+      const hasDryTrees = addInstancedGlbProps(
+        group,
+        'env_dry_tree',
+        dryTrees,
+      );
 
-      placements.forEach((pl, idx) => {
-        const mod = idx % 5;
-        if (mod === 0 || mod === 1) pineRound.push({ x: pl.x, z: pl.z, scale: pl.scale * 0.95, rotY: pl.rot });
-        else if (mod === 2) pineTallA.push({ x: pl.x, z: pl.z, scale: pl.scale * 0.9, rotY: pl.rot });
-        else if (mod === 3) pineTallB.push({ x: pl.x, z: pl.z, scale: pl.scale * 0.88, rotY: pl.rot });
-        else rocks.push({ x: pl.x, z: pl.z, scale: pl.scale * 1.25, rotY: pl.rot });
-      });
+      const hasDryGrass = addInstancedGlbProps(
+        group,
+        'env_dry_grass',
+        dryGrass,
+      );
 
-      addInstancedGlbProps(group, 'pine_round', pineRound);
-      addInstancedGlbProps(group, 'pine_tall_a', pineTallA);
-      addInstancedGlbProps(group, 'pine_tall_b', pineTallB);
-      addInstancedGlbProps(group, 'rock_large', rocks);
-    } else if (track.def.theme === 'sakura') {
-      // Sakura Mountain Pass: Alpine pines, slate boulders & cherry-blossom trees
-      const pineTall: SceneryPlacement[] = [];
-      const rocks: SceneryPlacement[] = [];
-      const blossomTrees: SceneryPlacement[] = [];
+      const hasCanyonRocks = addInstancedGlbProps(
+        group,
+        'canyon_rock',
+        canyonRocks,
+      );
 
-      placements.forEach((pl, idx) => {
-        const mod = idx % 4;
-        if (mod === 0) {
-          pineTall.push({ x: pl.x, z: pl.z, scale: pl.scale, rotY: pl.rot });
-        } else if (mod === 1) {
-          rocks.push({ x: pl.x, z: pl.z, scale: pl.scale * 1.15, rotY: pl.rot });
-        } else {
-          blossomTrees.push({ x: pl.x, z: pl.z, scale: pl.scale * 1.05, rotY: pl.rot });
-        }
-      });
-
-      addInstancedGlbProps(group, 'pine_tall_b', pineTall);
-      addInstancedGlbProps(group, 'rock_large', rocks);
-
-      if (blossomTrees.length > 0) {
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3f2a22, roughness: 0.92, metalness: 0.02 });
-        const blossomMat = new THREE.MeshStandardMaterial({
-          color: 0xf9a8d4,
-          roughness: 0.85,
-          metalness: 0.02,
-          emissive: palette.weather === 'night' ? 0x4a1d34 : 0x000000,
-          emissiveIntensity: palette.weather === 'night' ? 0.35 : 0,
-        });
-        const trunkInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.28, 0.46, 3.6, 8), trunkMat, blossomTrees.length);
-        const crownMainInst = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(2.35, 1), blossomMat, blossomTrees.length);
-        const crownSideInst = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1.55, 1), blossomMat, blossomTrees.length);
-        const bDummy = new THREE.Object3D();
-        const pinkTint = new THREE.Color();
-
-        blossomTrees.forEach((bt, idx) => {
-          bDummy.position.set(bt.x, 1.8 * bt.scale, bt.z);
-          bDummy.rotation.set(0, bt.rotY, 0);
-          bDummy.scale.setScalar(bt.scale);
-          bDummy.updateMatrix();
-          trunkInst.setMatrixAt(idx, bDummy.matrix);
-
-          bDummy.position.set(bt.x, 4.4 * bt.scale, bt.z);
-          bDummy.updateMatrix();
-          crownMainInst.setMatrixAt(idx, bDummy.matrix);
-
-          bDummy.position.set(bt.x + Math.cos(bt.rotY) * 1.4 * bt.scale, 3.8 * bt.scale, bt.z + Math.sin(bt.rotY) * 1.4 * bt.scale);
-          bDummy.updateMatrix();
-          crownSideInst.setMatrixAt(idx, bDummy.matrix);
-
-          pinkTint.setHSL(0.92 + ((idx % 5) - 2) * 0.008, 0.72, idx % 2 === 0 ? 0.78 : 0.84);
-          crownMainInst.setColorAt(idx, pinkTint);
-          crownSideInst.setColorAt(idx, pinkTint);
-        });
-        trunkInst.instanceMatrix.needsUpdate = true;
-        crownMainInst.instanceMatrix.needsUpdate = true;
-        crownSideInst.instanceMatrix.needsUpdate = true;
-        if (crownMainInst.instanceColor) crownMainInst.instanceColor.needsUpdate = true;
-        if (crownSideInst.instanceColor) crownSideInst.instanceColor.needsUpdate = true;
-        group.add(trunkInst, crownMainInst, crownSideInst);
+      if (!hasDryTrees) {
+        addInstancedGlbProps(group, 'cactus_tall', dryTrees);
       }
-    } else {
-      // Midnight Marina: Real multi-story illuminated skyscrapers & waterfront buildings
-      const skyA: SceneryPlacement[] = [];
-      const skyB: SceneryPlacement[] = [];
-      const skyC: SceneryPlacement[] = [];
-      const bldgA: SceneryPlacement[] = [];
 
-      placements.forEach((pl, idx) => {
-        const mod = idx % 4;
-        // Snap building orientations neatly to cardinal/45-deg city grid angles
-        const gridYaw = Math.round(pl.rot / (Math.PI * 0.25)) * (Math.PI * 0.25);
-        if (mod === 0) skyA.push({ x: pl.x, z: pl.z, scale: pl.scale, rotY: gridYaw });
-        else if (mod === 1) skyB.push({ x: pl.x, z: pl.z, scale: pl.scale, rotY: gridYaw });
-        else if (mod === 2) skyC.push({ x: pl.x, z: pl.z, scale: pl.scale, rotY: gridYaw });
-        else bldgA.push({ x: pl.x, z: pl.z, scale: pl.scale * 1.1, rotY: gridYaw });
-      });
+      if (!hasDryGrass) {
+        addInstancedGlbProps(group, 'cactus_short', dryGrass);
+      }
 
-      addInstancedGlbProps(group, 'skyscraper_a', skyA);
-      addInstancedGlbProps(group, 'skyscraper_b', skyB);
-      addInstancedGlbProps(group, 'skyscraper_c', skyC);
-      addInstancedGlbProps(group, 'building_a', bldgA);
+      if (!hasCanyonRocks) {
+        addInstancedGlbProps(group, 'canyon_cliff', canyonRocks);
+      }
     }
 
-    // Place user-imported .GLB environment props around outer perimeter if uploaded
+    // ---------------------------------------------------------
+    // COASTAL
+    // ---------------------------------------------------------
+    else if (track.def.theme === 'coastal') {
+      const palms: SceneryPlacement[] = [];
+      const rocks: SceneryPlacement[] = [];
+
+      placements.forEach((pl, idx) => {
+        if (idx % 4 === 0) {
+          rocks.push({
+            x: pl.x,
+            z: pl.z,
+            scale: pl.scale * 1.15,
+            rotY: pl.rot,
+          });
+        } else {
+          palms.push({
+            x: pl.x,
+            z: pl.z,
+            scale: pl.scale * 0.95,
+            rotY: pl.rot,
+          });
+        }
+      });
+
+      const hasPalms = addInstancedGlbProps(
+        group,
+        'env_palm_tree',
+        palms,
+      );
+
+      const hasRocks = addInstancedGlbProps(
+        group,
+        'env_stylized_rocks',
+        rocks,
+      );
+
+      if (!hasPalms) {
+        addInstancedGlbProps(group, 'pine_tall_a', palms);
+      }
+
+      if (!hasRocks) {
+        addInstancedGlbProps(group, 'rock_large', rocks);
+      }
+    }
+
+    // ---------------------------------------------------------
+    // SAKURA PASS
+    // New Japanese assets have priority.
+    // Original trees and rocks are secondary filler.
+    // ---------------------------------------------------------
+    else if (track.def.theme === 'sakura') {
+      const cherryTrees: SceneryPlacement[] = [];
+      const temples: SceneryPlacement[] = [];
+      const halls: SceneryPlacement[] = [];
+      const fantasyBuildings: SceneryPlacement[] = [];
+      const architecture: SceneryPlacement[] = [];
+      const lamps: SceneryPlacement[] = [];
+      const drums: SceneryPlacement[] = [];
+      const statues: SceneryPlacement[] = [];
+
+      const originalTrees: SceneryPlacement[] = [];
+      const originalRocks: SceneryPlacement[] = [];
+
+      placements.forEach((pl, idx) => {
+        const mod = idx % 32;
+
+        const item: SceneryPlacement = {
+          x: pl.x,
+          z: pl.z,
+          scale: pl.scale,
+          rotY: pl.rot,
+        };
+
+        if (mod < 13) {
+          cherryTrees.push(item);
+        } else if (mod < 16) {
+          originalTrees.push({
+            ...item,
+            scale: pl.scale * 0.78,
+          });
+        } else if (mod < 18) {
+          temples.push({
+            ...item,
+            scale: pl.scale * 1.05,
+          });
+        } else if (mod < 20) {
+          halls.push({
+            ...item,
+            scale: pl.scale * 0.95,
+          });
+        } else if (mod < 22) {
+          fantasyBuildings.push({
+            ...item,
+            scale: pl.scale * 0.9,
+          });
+        } else if (mod < 24) {
+          architecture.push({
+            ...item,
+            scale: pl.scale * 0.9,
+          });
+        } else if (mod < 27) {
+          lamps.push({
+            ...item,
+            scale: pl.scale * 0.72,
+          });
+        } else if (mod < 28) {
+          drums.push({
+            ...item,
+            scale: pl.scale * 0.65,
+          });
+        } else if (mod < 29) {
+          statues.push({
+            ...item,
+            scale: pl.scale * 0.55,
+          });
+        } else {
+          originalRocks.push({
+            ...item,
+            scale: pl.scale * 0.8,
+          });
+        }
+      });
+
+      const hasCherry = addInstancedGlbProps(
+        group,
+        'sakura_cherry_trees',
+        cherryTrees,
+      );
+
+      const hasTemple = addInstancedGlbProps(
+        group,
+        'sakura_japanese_temple',
+        temples,
+      );
+
+      const hasHall = addInstancedGlbProps(
+        group,
+        'sakura_chinese_hall',
+        halls,
+      );
+
+      const hasFantasy = addInstancedGlbProps(
+        group,
+        'sakura_fantasy_architecture',
+        fantasyBuildings,
+      );
+
+      const hasArchitecture = addInstancedGlbProps(
+        group,
+        'sakura_chinese_architecture',
+        architecture,
+      );
+
+      const hasLamps = addInstancedGlbProps(
+        group,
+        'sakura_lamp_pagoda',
+        lamps,
+      );
+
+      const hasDrums = addInstancedGlbProps(
+        group,
+        'sakura_drum',
+        drums,
+      );
+
+      const hasStatues = addInstancedGlbProps(
+        group,
+        'sakura_statue',
+        statues,
+      );
+
+      // Fallbacks if a new Sakura asset is unavailable.
+      if (!hasCherry) {
+        addInstancedGlbProps(group, 'env_cherry_blossom', cherryTrees);
+      }
+
+      if (!hasTemple) {
+        addInstancedGlbProps(group, 'pine_tall_b', temples);
+      }
+
+      if (!hasHall) {
+        addInstancedGlbProps(group, 'pine_round', halls);
+      }
+
+      if (!hasFantasy) {
+        addInstancedGlbProps(group, 'pine_tall_a', fantasyBuildings);
+      }
+
+      if (!hasArchitecture) {
+        addInstancedGlbProps(group, 'pine_tall_b', architecture);
+      }
+
+      if (!hasLamps) {
+        addInstancedGlbProps(group, 'pine_round', lamps);
+      }
+
+      if (!hasDrums) {
+        addInstancedGlbProps(group, 'rock_large', drums);
+      }
+
+      if (!hasStatues) {
+        addInstancedGlbProps(group, 'rock_large', statues);
+      }
+
+      // Original scenery as secondary filler.
+      addInstancedGlbProps(
+        group,
+        'env_spruce_trees',
+        originalTrees,
+      );
+
+      addInstancedGlbProps(
+        group,
+        'env_stylized_rocks',
+        originalRocks,
+      );
+    }
+
+    // ---------------------------------------------------------
+    // MIDNIGHT MARINA
+    // Original assets ONLY. No new Marine GLBs.
+    // ---------------------------------------------------------
+    else if (track.def.theme === 'midnight') {
+      const skyscraperA: SceneryPlacement[] = [];
+      const skyscraperB: SceneryPlacement[] = [];
+      const skyscraperC: SceneryPlacement[] = [];
+      const buildings: SceneryPlacement[] = [];
+
+      placements.forEach((pl, idx) => {
+        const item: SceneryPlacement = {
+          x: pl.x,
+          z: pl.z,
+          scale: pl.scale,
+          rotY: pl.rot,
+        };
+
+        const mod = idx % 10;
+
+        if (mod < 3) {
+          skyscraperA.push(item);
+        } else if (mod < 6) {
+          skyscraperB.push(item);
+        } else if (mod < 8) {
+          skyscraperC.push(item);
+        } else {
+          buildings.push(item);
+        }
+      });
+
+      addInstancedGlbProps(
+        group,
+        'skyscraper_a',
+        skyscraperA,
+      );
+
+      addInstancedGlbProps(
+        group,
+        'skyscraper_b',
+        skyscraperB,
+      );
+
+      addInstancedGlbProps(
+        group,
+        'skyscraper_c',
+        skyscraperC,
+      );
+
+      addInstancedGlbProps(
+        group,
+        'building_a',
+        buildings,
+      );
+    }
+
+    // ---------------------------------------------------------
+    // USER-IMPORTED CUSTOM ENVIRONMENT MODELS
+    // ---------------------------------------------------------
     const { proto: customEnvProto } = getCachedCustomEnv();
+
     if (customEnvProto) {
-      const maxCustom = Math.min(24, Math.floor(placements.length / 3));
+      const maxCustom = Math.min(
+        24,
+        Math.floor(placements.length / 3),
+      );
+
       for (let i = 0; i < maxCustom; i++) {
         const pl = placements[i * 3];
+
         const envObj = customEnvProto.clone(true);
+
         envObj.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
             child.userData.sharedCustomEnv = true;
           }
         });
-        envObj.position.set(pl.x + 6.5, 0, pl.z - 5.5);
+
+        envObj.position.set(
+          pl.x + 6.5,
+          0,
+          pl.z - 5.5,
+        );
+
         envObj.rotation.y = pl.rot;
         envObj.scale.setScalar(pl.scale);
+
         group.add(envObj);
       }
     }
