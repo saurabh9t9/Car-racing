@@ -4,10 +4,13 @@ import Play from 'lucide-react/dist/esm/icons/play.js';
 import RotateCcw from 'lucide-react/dist/esm/icons/rotate-ccw.js';
 import Trophy from 'lucide-react/dist/esm/icons/trophy.js';
 import type { RacerState } from '../shared/types';
+import type { GraphicsQuality } from '../shared/graphicsQuality';
 import { formatRaceTime } from './RaceHud';
 
 interface PauseModalProps {
   isOnline: boolean;
+  graphicsQuality: GraphicsQuality;
+  onChangeGraphicsQuality: (quality: GraphicsQuality) => void;
   onResume: () => void;
   onRestart: () => void;
   onExitToTitle: () => void;
@@ -15,6 +18,8 @@ interface PauseModalProps {
 
 export const PauseModal: React.FC<PauseModalProps> = ({
   isOnline,
+  graphicsQuality,
+  onChangeGraphicsQuality,
   onResume,
   onRestart,
   onExitToTitle,
@@ -28,6 +33,21 @@ export const PauseModal: React.FC<PauseModalProps> = ({
             {isOnline ? 'Online room race continues on server' : 'Simulation paused'}
           </p>
         </div>
+
+        <label className="block space-y-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">Graphics quality</span>
+          <select
+            value={graphicsQuality}
+            onChange={(event) => onChangeGraphicsQuality(event.target.value as GraphicsQuality)}
+            className="w-full rounded-lg border border-white/15 bg-[#10141c] px-3 py-2.5 text-sm text-white outline-none focus:border-[#ff4d2e]"
+          >
+            {(['AUTO', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA'] as const).map((quality) => (
+              <option key={quality} value={quality}>
+                {quality === 'AUTO' ? 'Auto' : `${quality[0]}${quality.slice(1).toLowerCase()}`}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <div className="space-y-2.5">
           <button

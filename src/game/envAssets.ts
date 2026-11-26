@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { TrackTheme } from '../shared/types';
+import { recordGlbDownload, recordGlbLoaded } from './performanceStats';
 
 export type EnvModelId =
   | 'race_drag_start_and_finish_line'
@@ -91,21 +92,21 @@ const ENV_MODEL_SPECS: EnvModelSpec[] = [
   { id: 'building_a', file: '/models/env/building_a.glb', targetHeight: 19.0, variant: 'night_city' },
   { id: 'env_spruce_trees', file: '/models/env/trees/spruce_trees.glb', targetHeight: 12, variant: 'alpine_tree',},
   { id: 'env_lowpoly_tree', file: '/models/env/trees/tree_low_poly_lowpoly.glb', targetHeight: 9, variant: 'alpine_tree',},
-  { id: 'env_cherry_blossom', file: '/models/env/trees/cherry_blossom_trees.glb', targetHeight: 10, variant: 'default',},
+  { id: 'env_cherry_blossom', file: '/models/env/sakura pass/cherry_blossom_trees.glb', targetHeight: 10, variant: 'default',},
   { id: 'env_stylized_rocks', file: '/models/env/rocks/stylized_rocks.glb', targetHeight: 4, variant: 'alpine_rock',},
   { id: 'env_palm_tree', file: '/models/env/trees/palm_tree_tall.glb', targetHeight: 11, variant: 'default',},
   { id: 'env_dry_tree', file: '/models/env/trees/dry_tree_vurvur_house_5.glb', targetHeight: 8, variant: 'default',},
   { id: 'env_dry_grass', file: '/models/env/trees/dry_realistic_grass_lods_1.glb', targetHeight: 2, variant: 'default',},
 
   // Sakura Pass assets: exact folder/file names from the supplied asset browser.
-  { id: 'sakura_statue', file: '/models/env/sakura%20pass/2ff77d68adf6448a936fa1b1575133cb.glb', targetHeight: 3.2, variant: 'default' },
-  { id: 'sakura_cherry_trees', file: '/models/env/sakura%20pass/cherry_blossom_trees.glb', targetHeight: 12.0, variant: 'default' },
-  { id: 'sakura_chinese_architecture', file: '/models/env/sakura%20pass/chinese_architecture.glb', targetHeight: 11.0, variant: 'racing_prop' },
-  { id: 'sakura_fantasy_architecture', file: '/models/env/sakura%20pass/chinese_fantasy_03_-_revisited.glb', targetHeight: 18.0, variant: 'racing_prop' },
-  { id: 'sakura_chinese_hall', file: '/models/env/sakura%20pass/chinese_hall.glb', targetHeight: 15.0, variant: 'racing_prop' },
-  { id: 'sakura_japanese_temple', file: '/models/env/sakura%20pass/japanese_lowpoly_temple.glb', targetHeight: 18.0, variant: 'racing_prop' },
-  { id: 'sakura_lamp_pagoda', file: '/models/env/sakura%20pass/japanese_wooden_lamp_pagoda.glb', targetHeight: 6.5, variant: 'racing_prop' },
-  { id: 'sakura_drum', file: '/models/env/sakura%20pass/maybe_ip_drum.glb', targetHeight: 5.0, variant: 'racing_prop' },
+  { id: 'sakura_statue', file: '/models/env/sakura pass/2ff77d68adf6448a936fa1b1575133cb.glb', targetHeight: 3.2, variant: 'default' },
+  { id: 'sakura_cherry_trees', file: '/models/env/sakura pass/cherry_blossom_trees.glb', targetHeight: 12.0, variant: 'default' },
+  { id: 'sakura_chinese_architecture', file: '/models/env/sakura pass/chinese_architecture.glb', targetHeight: 11.0, variant: 'racing_prop' },
+  { id: 'sakura_fantasy_architecture', file: '/models/env/sakura pass/chinese_fantasy_03_-_revisited.glb', targetHeight: 18.0, variant: 'racing_prop' },
+  { id: 'sakura_chinese_hall', file: '/models/env/sakura pass/chinese_hall.glb', targetHeight: 15.0, variant: 'racing_prop' },
+  { id: 'sakura_japanese_temple', file: '/models/env/sakura pass/japanese_lowpoly_temple.glb', targetHeight: 18.0, variant: 'racing_prop' },
+  { id: 'sakura_lamp_pagoda', file: '/models/env/sakura pass/japanese_wooden_lamp_pagoda.glb', targetHeight: 6.5, variant: 'racing_prop' },
+  { id: 'sakura_drum', file: '/models/env/sakura pass/maybe_jp_drum.glb', targetHeight: 5.0, variant: 'racing_prop' },
 ];
 
 export interface EnvMeshPart {
@@ -134,8 +135,31 @@ const TEX_URLS = {
 const textureLoader = new THREE.TextureLoader();
 const cachedTextures = new Map<string, THREE.Texture>();
 const envAssetCache = new Map<EnvModelId, NormalizedEnvAsset>();
-let envPreloadPromise: Promise<void> | null = null;
+const envPreloadPromises = new Map<TrackTheme, Promise<void>>();
+const pendingEnvLoads = new Map<EnvModelId, Promise<void>>();
 let envLoader: GLTFLoader | null = null;
+
+const COMMON_ENV_MODEL_IDS: readonly EnvModelId[] = [
+  'race_drag_start_and_finish_line', 'grandstand_covered', 'pits_garage', 'pits_office',
+  'banner_tower', 'billboard', 'flag_checkers', 'light_post', 'tent',
+  'barrier_red', 'barrier_white', 'pylon',
+];
+
+const THEME_ENV_MODEL_IDS: Record<TrackTheme, readonly EnvModelId[]> = {
+  alpine: ['pine_tall_a', 'pine_tall_b', 'pine_round', 'rock_large', 'env_spruce_trees', 'env_lowpoly_tree', 'env_stylized_rocks'],
+  sunset: ['canyon_tall', 'canyon_rock', 'canyon_cliff', 'cactus_tall', 'cactus_short', 'env_dry_tree', 'env_dry_grass'],
+  midnight: ['skyscraper_a', 'skyscraper_b', 'skyscraper_c', 'building_a'],
+  coastal: ['pine_tall_a', 'pine_tall_b', 'rock_large', 'env_palm_tree', 'env_stylized_rocks'],
+  sakura: ['pine_tall_a', 'pine_tall_b', 'pine_round', 'rock_large', 'env_spruce_trees', 'env_stylized_rocks', 'sakura_statue', 'sakura_cherry_trees', 'sakura_chinese_architecture', 'sakura_fantasy_architecture', 'sakura_chinese_hall', 'sakura_japanese_temple', 'sakura_lamp_pagoda', 'sakura_drum'],
+};
+
+const TERRAIN_TEXTURE_BY_THEME: Record<TrackTheme, { key: keyof typeof TEX_URLS; repeatX: number; repeatY: number }> = {
+  alpine: { key: 'alpineTerrain', repeatX: 100, repeatY: 105 },
+  sunset: { key: 'sunsetTerrain', repeatX: 105, repeatY: 105 },
+  midnight: { key: 'midnightTerrain', repeatX: 115, repeatY: 115 },
+  coastal: { key: 'coastalTerrain', repeatX: 105, repeatY: 105 },
+  sakura: { key: 'sakuraTerrain', repeatX: 100, repeatY: 100 },
+};
 
 function getEnvGltfLoader(): GLTFLoader {
   if (!envLoader) {
@@ -477,51 +501,89 @@ function normalizeEnvModel(
   };
 }
 
-export async function preloadEnvironmentAssets(onStep?: () => void): Promise<void> {
-  if (envPreloadPromise) return envPreloadPromise;
+async function loadEnvironmentModel(spec: EnvModelSpec): Promise<void> {
+  if (envAssetCache.has(spec.id)) return;
+  const pending = pendingEnvLoads.get(spec.id);
+  if (pending) return pending;
 
-  const loader = getEnvGltfLoader();
+  const load = (async () => {
+    const loader = getEnvGltfLoader();
+    const optimizedUrl = spec.file.replace(/^\/models\//, '/optimized-models/');
+    const startedAt = performance.now();
+    let loadedUrl = optimizedUrl;
+    let response = await fetch(optimizedUrl, { credentials: 'same-origin' });
+    if (!response.ok) {
+      loadedUrl = spec.file;
+      response = await fetch(spec.file, { credentials: 'same-origin' });
+    }
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const buffer = await response.arrayBuffer();
+    recordGlbDownload(loadedUrl, buffer.byteLength, performance.now() - startedAt);
+    const gltf = await new Promise<{ scene: THREE.Group }>((resolve, reject) => {
+      loader.parse(buffer, '/models/env/', (parsed) => resolve(parsed), reject);
+    });
+    const normalized = normalizeEnvModel(spec, gltf.scene);
+    envAssetCache.set(spec.id, normalized);
+    recordGlbLoaded(loadedUrl);
+  })();
 
-  envPreloadPromise = (async () => {
-    const texTasks: Array<Promise<unknown>> = [
-      loadTextureCached('alpineTerrain', TEX_URLS.alpineTerrain, 100, 105).then(() => onStep?.()),
-      loadTextureCached('sunsetTerrain', TEX_URLS.sunsetTerrain, 105, 105).then(() => onStep?.()),
-      loadTextureCached('midnightTerrain', TEX_URLS.midnightTerrain, 115, 115).then(() => onStep?.()),
-      loadTextureCached('coastalTerrain', TEX_URLS.coastalTerrain, 105, 105).then(() => onStep?.()),
-      loadTextureCached('sakuraTerrain', TEX_URLS.sakuraTerrain, 100, 100).then(() => onStep?.()),
+  pendingEnvLoads.set(spec.id, load);
+  try {
+    await load;
+  } finally {
+    pendingEnvLoads.delete(spec.id);
+  }
+}
+
+function getEnvironmentModelSpecs(theme: TrackTheme): EnvModelSpec[] {
+  const ids = new Set<EnvModelId>([...COMMON_ENV_MODEL_IDS, ...THEME_ENV_MODEL_IDS[theme]]);
+  return ENV_MODEL_SPECS.filter((spec) => ids.has(spec.id));
+}
+
+export function getEnvironmentPreloadStepCount(theme: TrackTheme): number {
+  return 4 + getEnvironmentModelSpecs(theme).length;
+}
+
+export async function preloadEnvironmentAssets(
+  theme: TrackTheme = 'alpine',
+  onStep?: () => void,
+): Promise<void> {
+  const existing = envPreloadPromises.get(theme);
+  if (existing) return existing;
+
+  const promise = (async () => {
+    const terrain = TERRAIN_TEXTURE_BY_THEME[theme];
+    const textureTasks: Promise<unknown>[] = [
+      loadTextureCached(terrain.key, TEX_URLS[terrain.key], terrain.repeatX, terrain.repeatY).then(() => onStep?.()),
       loadTextureCached('garageFloor', TEX_URLS.midnightTerrain, 12, 12).then(() => onStep?.()),
       loadTextureCached('asphalt', TEX_URLS.asphalt, 2, 1).then(() => onStep?.()),
       loadTextureCached('concrete', TEX_URLS.concrete, 2, 1).then(() => onStep?.()),
     ];
 
-    const glbTasks = ENV_MODEL_SPECS.map(async (spec) => {
-      if (envAssetCache.has(spec.id)) {
-        onStep?.();
-        return;
+    const specs = getEnvironmentModelSpecs(theme);
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < specs.length) {
+        const spec = specs[cursor++];
+        try {
+          await loadEnvironmentModel(spec);
+        } catch (err) {
+          console.warn(`Failed to preload env GLB ${spec.file}:`, err);
+        } finally {
+          onStep?.();
+        }
       }
-      try {
-        const res = await fetch(spec.file, { credentials: 'same-origin' });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const buffer = await res.arrayBuffer();
-        const gltf = await new Promise<{ scene: THREE.Group }>((resolve, reject) => {
-          loader.parse(buffer, '/models/env/', (parsed) => resolve(parsed), reject);
-        });
-        const normalized = normalizeEnvModel(spec, gltf.scene);
-        envAssetCache.set(spec.id, normalized);
-      } catch (err) {
-        console.warn(`Failed to preload env GLB ${spec.file}:`, err);
-      } finally {
-        onStep?.();
-      }
-    });
-
-    await Promise.all([...texTasks, ...glbTasks]);
+    };
+    const modelTasks = Array.from(
+      { length: Math.min(3, specs.length) },
+      () => worker(),
+    );
+    await Promise.all([...textureTasks, ...modelTasks]);
   })();
 
-  return envPreloadPromise;
+  envPreloadPromises.set(theme, promise);
+  return promise;
 }
-
-export const TOTAL_ENV_PRELOAD_STEPS = 8 + ENV_MODEL_SPECS.length;
 
 export function getEnvAsset(id: EnvModelId): NormalizedEnvAsset | null {
   return envAssetCache.get(id) ?? null;

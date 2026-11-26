@@ -465,38 +465,77 @@ interface SceneryPlacement {
   rotY: number;
 }
 
+interface SceneryLodChunk {
+  group: THREE.Group;
+  centerX: number;
+  centerZ: number;
+}
+
 function addInstancedGlbProps(
   group: THREE.Group,
   modelId: EnvModelId,
   placements: SceneryPlacement[],
+  castShadows = true,
+  lodChunks?: SceneryLodChunk[],
 ): boolean {
   if (placements.length === 0) return true;
+  lodChunks ??= group.userData.sceneryLodChunks as SceneryLodChunk[] | undefined;
   const asset = getEnvAsset(modelId);
   if (!asset || asset.parts.length === 0) return false;
 
+  const buckets = new Map<string, { placements: SceneryPlacement[]; x: number; z: number }>();
+  const chunkSize = 260;
+  if (!lodChunks) {
+    buckets.set('all', { placements, x: 0, z: 0 });
+  } else {
+    for (const placement of placements) {
+      const cellX = Math.floor(placement.x / chunkSize);
+      const cellZ = Math.floor(placement.z / chunkSize);
+      const key = `${cellX}:${cellZ}`;
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = {
+          placements: [],
+          x: (cellX + 0.5) * chunkSize,
+          z: (cellZ + 0.5) * chunkSize,
+        };
+        buckets.set(key, bucket);
+      }
+      bucket.placements.push(placement);
+    }
+  }
+
   const dummy = new THREE.Object3D();
   const finalMat = new THREE.Matrix4();
-
-  for (const part of asset.parts) {
-    const inst = new THREE.InstancedMesh(part.geometry, part.material, placements.length);
-    inst.userData.sharedEnvGeo = true;
-    inst.userData.sharedEnvMat = true;
-    inst.castShadow = true;
-    inst.receiveShadow = true;
-
-    for (let i = 0; i < placements.length; i++) {
-      const pl = placements[i];
-      dummy.position.set(pl.x, 0, pl.z);
-      dummy.rotation.set(0, pl.rotY, 0);
-      dummy.scale.setScalar(pl.scale);
-      dummy.updateMatrix();
-      finalMat.multiplyMatrices(dummy.matrix, part.localMatrix);
-      inst.setMatrixAt(i, finalMat);
+  for (const bucket of buckets.values()) {
+    const batchRoot = lodChunks ? new THREE.Group() : group;
+    if (lodChunks) {
+      batchRoot.name = `scenery-${modelId}`;
+      group.add(batchRoot);
+      lodChunks.push({ group: batchRoot, centerX: bucket.x, centerZ: bucket.z });
     }
 
-    inst.instanceMatrix.needsUpdate = true;
-    inst.computeBoundingSphere();
-    group.add(inst);
+    for (const part of asset.parts) {
+      const inst = new THREE.InstancedMesh(part.geometry, part.material, bucket.placements.length);
+      inst.userData.sharedEnvGeo = true;
+      inst.userData.sharedEnvMat = true;
+      inst.castShadow = castShadows;
+      inst.receiveShadow = castShadows;
+
+      for (let i = 0; i < bucket.placements.length; i++) {
+        const pl = bucket.placements[i];
+        dummy.position.set(pl.x, 0, pl.z);
+        dummy.rotation.set(0, pl.rotY, 0);
+        dummy.scale.setScalar(pl.scale);
+        dummy.updateMatrix();
+        finalMat.multiplyMatrices(dummy.matrix, part.localMatrix);
+        inst.setMatrixAt(i, finalMat);
+      }
+
+      inst.instanceMatrix.needsUpdate = true;
+      inst.computeBoundingSphere();
+      batchRoot.add(inst);
+    }
   }
   return true;
 }
@@ -505,6 +544,7 @@ export interface BuiltTrackScene {
   group: THREE.Group;
   palette: EnvironmentLightingProfile;
   obstacleMeshes: Map<string, THREE.Group>;
+  updateLod: (x: number, z: number, maxDistance: number) => void;
   dispose: () => void;
 }
 
@@ -517,6 +557,8 @@ export function buildTrackScene(
   const palette = resolveEnvironmentLighting(track.def.theme, weather);
   const halfW = track.def.roadWidth * 0.5;
   const obstacleMeshes = new Map<string, THREE.Group>();
+  const sceneryLodChunks: SceneryLodChunk[] = [];
+  group.userData.sceneryLodChunks = sceneryLodChunks;
 
   const terrainTex = getBiomeTerrainTexture(track.def.theme, maxAnisotropy);
   const asphaltTex = getAsphaltRoadTexture(maxAnisotropy);
@@ -819,8 +861,9 @@ export function buildTrackScene(
   // Sakura gets dense, track-following scenery.
   // All other themes, including Midnight, use the original placement pattern.
   if (isSakura) {
-    const stationCount = 72;
-    const laneOffsets = [19, 29, 41, 56];
+    // Keep the Sakura look, with fewer off-track props to reduce GPU work.
+    const stationCount = 28;
+    const laneOffsets = [25, 55];
 
     let seed = 0;
 
@@ -1071,6 +1114,11 @@ export function buildTrackScene(
     // Original trees and rocks are secondary filler.
     // ---------------------------------------------------------
     else if (track.def.theme === 'sakura') {
+      const addSakuraProps = (
+        modelId: EnvModelId,
+        placements: SceneryPlacement[],
+      ) => addInstancedGlbProps(group, modelId, placements, false, sceneryLodChunks);
+
       const cherryTrees: SceneryPlacement[] = [];
       const temples: SceneryPlacement[] = [];
       const halls: SceneryPlacement[] = [];
@@ -1143,99 +1191,59 @@ export function buildTrackScene(
         }
       });
 
-      const hasCherry = addInstancedGlbProps(
-        group,
-        'sakura_cherry_trees',
-        cherryTrees,
-      );
+      const hasCherry = addSakuraProps('sakura_cherry_trees', cherryTrees);
 
-      const hasTemple = addInstancedGlbProps(
-        group,
-        'sakura_japanese_temple',
-        temples,
-      );
+      const hasTemple = addSakuraProps('sakura_japanese_temple', temples);
 
-      const hasHall = addInstancedGlbProps(
-        group,
-        'sakura_chinese_hall',
-        halls,
-      );
+      const hasHall = addSakuraProps('sakura_chinese_hall', halls);
 
-      const hasFantasy = addInstancedGlbProps(
-        group,
-        'sakura_fantasy_architecture',
-        fantasyBuildings,
-      );
+      const hasFantasy = addSakuraProps('sakura_fantasy_architecture', fantasyBuildings);
 
-      const hasArchitecture = addInstancedGlbProps(
-        group,
-        'sakura_chinese_architecture',
-        architecture,
-      );
+      const hasArchitecture = addSakuraProps('sakura_chinese_architecture', architecture);
 
-      const hasLamps = addInstancedGlbProps(
-        group,
-        'sakura_lamp_pagoda',
-        lamps,
-      );
+      const hasLamps = addSakuraProps('sakura_lamp_pagoda', lamps);
 
-      const hasDrums = addInstancedGlbProps(
-        group,
-        'sakura_drum',
-        drums,
-      );
+      const hasDrums = addSakuraProps('sakura_drum', drums);
 
-      const hasStatues = addInstancedGlbProps(
-        group,
-        'sakura_statue',
-        statues,
-      );
+      const hasStatues = addSakuraProps('sakura_statue', statues);
 
       // Fallbacks if a new Sakura asset is unavailable.
       if (!hasCherry) {
-        addInstancedGlbProps(group, 'env_cherry_blossom', cherryTrees);
+        addSakuraProps('env_cherry_blossom', cherryTrees);
       }
 
       if (!hasTemple) {
-        addInstancedGlbProps(group, 'pine_tall_b', temples);
+        addSakuraProps('pine_tall_b', temples);
       }
 
       if (!hasHall) {
-        addInstancedGlbProps(group, 'pine_round', halls);
+        addSakuraProps('pine_round', halls);
       }
 
       if (!hasFantasy) {
-        addInstancedGlbProps(group, 'pine_tall_a', fantasyBuildings);
+        addSakuraProps('pine_tall_a', fantasyBuildings);
       }
 
       if (!hasArchitecture) {
-        addInstancedGlbProps(group, 'pine_tall_b', architecture);
+        addSakuraProps('pine_tall_b', architecture);
       }
 
       if (!hasLamps) {
-        addInstancedGlbProps(group, 'pine_round', lamps);
+        addSakuraProps('pine_round', lamps);
       }
 
       if (!hasDrums) {
-        addInstancedGlbProps(group, 'rock_large', drums);
+        addSakuraProps('rock_large', drums);
       }
 
       if (!hasStatues) {
-        addInstancedGlbProps(group, 'rock_large', statues);
+        addSakuraProps('rock_large', statues);
       }
 
       // Original scenery as secondary filler.
-      addInstancedGlbProps(
-        group,
-        'env_spruce_trees',
-        originalTrees,
-      );
+      addSakuraProps('env_spruce_trees', originalTrees);
 
-      addInstancedGlbProps(
-        group,
-        'env_stylized_rocks',
-        originalRocks,
-      );
+      addSakuraProps('env_stylized_rocks', originalRocks);
     }
 
     // ---------------------------------------------------------
@@ -1411,5 +1419,26 @@ export function buildTrackScene(
     boardTex50.dispose();
   };
 
-  return { group, palette, obstacleMeshes, dispose };
+  let lastLodX = Number.NaN;
+  let lastLodZ = Number.NaN;
+  let lastLodDistance = Number.NaN;
+  const updateLod = (x: number, z: number, maxDistance: number) => {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+    if (
+      Math.abs(x - lastLodX) < 18 &&
+      Math.abs(z - lastLodZ) < 18 &&
+      maxDistance === lastLodDistance
+    ) return;
+    lastLodX = x;
+    lastLodZ = z;
+    lastLodDistance = maxDistance;
+    const lodDistanceSq = maxDistance * maxDistance;
+    for (const chunk of sceneryLodChunks) {
+      const dx = chunk.centerX - x;
+      const dz = chunk.centerZ - z;
+      chunk.group.visible = dx * dx + dz * dz <= lodDistanceSq;
+    }
+  };
+
+  return { group, palette, obstacleMeshes, updateLod, dispose };
 }

@@ -15,6 +15,7 @@ import {
   saveHudSettings,
   type HudSettings,
 } from './shared/hudSettings';
+import { loadGraphicsQuality, type GraphicsQuality } from './shared/graphicsQuality';
 import { DEFAULT_CAR_CONFIG } from './shared/physics';
 import { STARTER_TRACKS } from './shared/trackMath';
 import type {
@@ -93,6 +94,7 @@ export default function App() {
   const [muted, setMuted] = useState<boolean>(false);
   const [hud, setHud] = useState<HudTelemetry>(INITIAL_HUD);
   const [hudSettings, setHudSettings] = useState<HudSettings>(loadHudSettings);
+  const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>(loadGraphicsQuality);
   const [hudSettingsOpen, setHudSettingsOpen] = useState<boolean>(false);
 
   // Multiplayer WebSocket state
@@ -604,6 +606,11 @@ export default function App() {
       {screen === 'paused' && (
         <PauseModal
           isOnline={isOnlineRace}
+          graphicsQuality={graphicsQuality}
+          onChangeGraphicsQuality={(quality) => {
+            setGraphicsQuality(quality);
+            engineRef.current?.setGraphicsQuality(quality);
+          }}
           onResume={() => {
             setScreen('playing');
             engineRef.current?.setPaused(false);

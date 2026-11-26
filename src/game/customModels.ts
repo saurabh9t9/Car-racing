@@ -4,7 +4,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { CAR_MODELS, DEFAULT_MODEL_ID, getCarModelSpec } from '../shared/carCatalog';
 import { isValidGlbBuffer } from '../shared/glbValidation';
-import { preloadEnvironmentAssets, TOTAL_ENV_PRELOAD_STEPS } from './envAssets';
+import type { TrackTheme } from '../shared/types';
+import { getEnvironmentPreloadStepCount, preloadEnvironmentAssets } from './envAssets';
+import { recordGlbDownload, recordGlbLoaded } from './performanceStats';
 
 export type CustomAssetSlot = 'car' | 'env';
 
@@ -34,11 +36,11 @@ interface StoredAssetRecord {
 }
 
 const DB_NAME = 'slipstream_custom_models_v1';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = 'assets';
 const FLEET_STORE_NAME = 'fleet_models';
-const MODEL_CACHE_NAME = 'turbo-drifter-models-v3';
-const LEGACY_CACHE_NAMES = ['turbo-drifter-models-v1', 'turbo-drifter-models-v2'];
+const MODEL_CACHE_NAME = 'turbo-drifter-models-v4';
+const LEGACY_CACHE_NAMES = ['turbo-drifter-models-v1', 'turbo-drifter-models-v2', 'turbo-drifter-models-v3'];
 
 let legacyCachesPurged = false;
 function purgeLegacyModelCaches(): void {
@@ -257,7 +259,9 @@ async function streamGlbResponse(
     throw new Error(`Invalid binary GLB header received from ${url}`);
   }
 
-  recordThroughputSample(buffer.byteLength, performance.now() - t0);
+  const elapsedMs = performance.now() - t0;
+  recordThroughputSample(buffer.byteLength, elapsedMs);
+  recordGlbDownload(url, buffer.byteLength, elapsedMs);
   return buffer;
 }
 
@@ -267,10 +271,13 @@ async function fetchModelBufferWithCache(
 ): Promise<ArrayBuffer> {
   ensurePersistentStorage();
   purgeLegacyModelCaches();
+  const optimizedUrl = url.replace(/^\/models\//, '/optimized-models/');
+  const cacheKey = optimizedUrl;
 
   // 1. Try permanent IndexedDB storage first (works across all origins & survives cache eviction)
-  const idbBuffer = await readFleetModelFromIdb(url);
+  const idbBuffer = await readFleetModelFromIdb(cacheKey);
   if (idbBuffer) {
+    recordGlbLoaded(cacheKey);
     onProgress(0.95);
     return idbBuffer;
   }
@@ -279,16 +286,17 @@ async function fetchModelBufferWithCache(
   if (typeof caches !== 'undefined') {
     try {
       const cache = await caches.open(MODEL_CACHE_NAME);
-      const cached = await cache.match(url);
+      const cached = await cache.match(cacheKey);
       if (cached) {
         onProgress(0.85);
         const buf = await cached.arrayBuffer();
         if (isValidGlbBuffer(buf)) {
+          recordGlbLoaded(cacheKey);
           onProgress(0.95);
-          void saveFleetModelToIdb(url, buf);
+          void saveFleetModelToIdb(cacheKey, buf);
           return buf;
         }
-        await cache.delete(url);
+        await cache.delete(cacheKey);
       }
     } catch {
       // Cache Storage blocked (e.g., strict private mode); proceed with network
@@ -298,18 +306,22 @@ async function fetchModelBufferWithCache(
   // 3. Stream over HTTP; if browser HTTP cache returns stale HTML/non-GLB, retry with cache: 'reload'
   let buffer: ArrayBuffer | null = null;
   let lastError: unknown = null;
+  const candidates = optimizedUrl === url ? [url] : [optimizedUrl, url];
   const cacheModes: RequestCache[] = ['default', 'reload', 'reload'];
 
-  for (let attempt = 0; attempt < cacheModes.length; attempt++) {
-    if (attempt > 0) {
-      await new Promise((r) => window.setTimeout(r, attempt * 350));
+  for (const candidate of candidates) {
+    for (let attempt = 0; attempt < cacheModes.length; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => window.setTimeout(r, attempt * 350));
+      }
+      try {
+        buffer = await streamGlbResponse(candidate, cacheModes[attempt], onProgress);
+        break;
+      } catch (err) {
+        lastError = err;
+      }
     }
-    try {
-      buffer = await streamGlbResponse(url, cacheModes[attempt], onProgress);
-      break;
-    } catch (err) {
-      lastError = err;
-    }
+    if (buffer) break;
   }
 
   if (!buffer) {
@@ -320,8 +332,8 @@ async function fetchModelBufferWithCache(
 
   // Persist permanently in both IndexedDB and Cache Storage before completing
   await Promise.all([
-    saveFleetModelToIdb(url, buffer),
-    saveFleetModelToCacheStorage(url, buffer),
+    saveFleetModelToIdb(cacheKey, buffer),
+    saveFleetModelToCacheStorage(cacheKey, buffer),
   ]);
 
   return buffer;
@@ -337,13 +349,24 @@ function openDb(): Promise<IDBDatabase> {
       return;
     }
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: 'slot' });
       }
       if (!db.objectStoreNames.contains(FLEET_STORE_NAME)) {
         db.createObjectStore(FLEET_STORE_NAME, { keyPath: 'url' });
+      } else if (event.oldVersion < 3) {
+        const store = req.transaction?.objectStore(FLEET_STORE_NAME);
+        const cursorRequest = store?.openCursor();
+        if (cursorRequest) {
+          cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result;
+            if (!cursor) return;
+            if (String(cursor.key).startsWith('/models/')) cursor.delete();
+            cursor.continue();
+          };
+        }
       }
     };
     req.onsuccess = () => {
@@ -640,6 +663,7 @@ export async function preloadStartupAssets(
   playerModelId: string | undefined,
   botFleetIds: readonly string[],
   isSoftwareGl: boolean,
+  trackTheme: TrackTheme,
   onProgress: (info: StartupLoadProgress) => void,
   onModelReady?: (proto: THREE.Group) => void,
 ): Promise<string[]> {
@@ -648,13 +672,10 @@ export async function preloadStartupAssets(
     playerModelId && getCarModelSpec(playerModelId) ? playerModelId : DEFAULT_MODEL_ID;
   const loadedIds: string[] = [];
 
-  // Download and prepare ALL car resources at startup so gameplay & garage are never interrupted
+  // Load the player car and initial opponents before gameplay; Garage models stream in later.
   const allModelIds: string[] = [primaryId];
   for (const id of botFleetIds) {
     if (getCarModelSpec(id) && !allModelIds.includes(id)) allModelIds.push(id);
-  }
-  for (const spec of CAR_MODELS) {
-    if (!allModelIds.includes(spec.id)) allModelIds.push(spec.id);
   }
 
   let envRatio = 0;
@@ -704,9 +725,9 @@ export async function preloadStartupAssets(
   await Promise.all([
     (async () => {
       let done = 0;
-      await preloadEnvironmentAssets(() => {
+      await preloadEnvironmentAssets(trackTheme, () => {
         done += 1;
-        envRatio = Math.min(1, done / TOTAL_ENV_PRELOAD_STEPS);
+        envRatio = Math.min(1, done / getEnvironmentPreloadStepCount(trackTheme));
         emitPercent();
       });
       envRatio = 1;
@@ -764,7 +785,7 @@ export async function preloadRemainingFleetInBackground(
     const net = getNetworkProfile();
 
     // On slow or metered connections, pause background downloads while actively racing so gameplay/WS stays smooth
-    if (backgroundPaused && net.tier !== 'fast') {
+    if (backgroundPaused) {
       await new Promise((r) => window.setTimeout(r, 250));
       continue;
     }

@@ -23,6 +23,14 @@ import type {
   VehicleConfig,
   WeatherPreset,
 } from '../shared/types';
+import {
+  GRAPHICS_PROFILES,
+  loadGraphicsQuality,
+  saveGraphicsQuality,
+  type GraphicsLevel,
+  type GraphicsProfile,
+  type GraphicsQuality,
+} from '../shared/graphicsQuality';
 import { getDefaultWeatherForTheme } from '../shared/weather';
 import { CAR_MODELS } from '../shared/carCatalog';
 import { computeGarageCameraFraming, stepGarageTurntable } from '../shared/garageCamera';
@@ -41,10 +49,12 @@ import {
   preloadRemainingFleetInBackground,
   preloadStartupAssets,
   warmUpModelTextures,
+  setBackgroundStreamingPaused,
   type StartupLoadProgress,
 } from './customModels';
-import { getGaragePaddockTexture, warmUpEnvTextures } from './envAssets';
+import { getGaragePaddockTexture, preloadEnvironmentAssets, warmUpEnvTextures } from './envAssets';
 import { buildTrackScene, type BuiltTrackScene } from './trackBuilder';
+import { PerformanceMonitor } from './performanceMonitor';
 
 export type EngineMode = 'title' | 'garage' | 'race';
 
@@ -105,18 +115,30 @@ export class RaceEngine {
   private keyLight: THREE.DirectionalLight;
   private hemiLight: THREE.HemisphereLight;
   private isSoftwareGl: boolean;
+  private performanceMonitor: PerformanceMonitor;
+  private graphicsQuality: GraphicsQuality = loadGraphicsQuality();
+  private adaptiveLevel: GraphicsLevel = 'HIGH';
+  private adaptiveFrameCount = 0;
+  private adaptiveWindowStart = performance.now();
+  private lowFpsWindows = 0;
+  private highFpsWindows = 0;
+  private nextAdaptiveChangeAt = 0;
+  private activeParticleCount = MAX_PARTICLES;
+  private activeRainCount = RAIN_DROP_COUNT;
 
   private mode: EngineMode = 'title';
   private paused = false;
   private disposed = false;
   private frameId = 0;
   private lastTime = performance.now();
+  private lastSceneryLodUpdateAt = 0;
 
   // Track & Car rigs
   private currentTrackDef: TrackDefinition = STARTER_TRACKS[0];
   private currentWeather: WeatherPreset = getDefaultWeatherForTheme(STARTER_TRACKS[0].theme);
   private compiledTrack: CompiledTrack = compileTrack(STARTER_TRACKS[0], 240);
   private builtTrack: BuiltTrackScene | null = null;
+  private trackLoadToken = 0;
   private carRigs = new Map<string, CarRig>();
   private carFlashTimers = new Map<string, number>();
 
@@ -214,6 +236,10 @@ export class RaceEngine {
       gl.getExtension('WEBGL_lose_context')?.loseContext();
       return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
     })();
+    const mobileViewport =
+      window.matchMedia?.('(pointer: coarse)').matches ||
+      Math.min(window.innerWidth, window.innerHeight) < 720;
+    this.adaptiveLevel = this.isSoftwareGl ? 'LOW' : mobileViewport ? 'MEDIUM' : 'HIGH';
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: !this.isSoftwareGl,
@@ -234,6 +260,7 @@ export class RaceEngine {
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
+    this.performanceMonitor = new PerformanceMonitor(container, import.meta.env.DEV);
     this.camera = new THREE.PerspectiveCamera(
       65,
       (container.clientWidth || 1280) / (container.clientHeight || 720),
@@ -349,6 +376,7 @@ export class RaceEngine {
       playerCar.modelId,
       BOT_FLEET_IDS,
       this.isSoftwareGl,
+      this.currentTrackDef.theme,
       onProgress,
       (proto) => warmUpModelTextures(proto, this.renderer),
     );
@@ -648,6 +676,17 @@ for (let y = 4; y < 320; y += step) {
     if (weather) this.currentWeather = weather;
     this.compiledTrack = compileTrack(trackDef, 240);
 
+    const loadToken = ++this.trackLoadToken;
+    this.rebuildTrackScene();
+
+    void preloadEnvironmentAssets(trackDef.theme).then(() => {
+      if (this.disposed || loadToken !== this.trackLoadToken) return;
+      warmUpEnvTextures(this.renderer);
+      this.rebuildTrackScene();
+    });
+  }
+
+  private rebuildTrackScene(): void {
     if (this.builtTrack) {
       this.scene.remove(this.builtTrack.group);
       this.builtTrack.dispose();
@@ -664,8 +703,10 @@ for (let y = 4; y < 320; y += step) {
   private restoreTrackLighting(): void {
     if (!this.builtTrack) return;
     const pal = this.builtTrack.palette;
+    const isSakura = pal.theme === 'sakura';
     this.scene.background = new THREE.Color(pal.skyColor);
     this.scene.fog = new THREE.Fog(pal.fogColor, pal.fogNear, pal.fogFar);
+    this.applyGraphicsProfile(isSakura);
     this.hemiLight.color.setHex(pal.ambientSky);
     this.hemiLight.groundColor.setHex(pal.ambientGround);
     this.hemiLight.intensity = pal.hemiIntensity;
@@ -755,6 +796,7 @@ for (let y = 4; y < 320; y += step) {
   }
 
   public enterTitleMode(playerCar: VehicleConfig): void {
+    setBackgroundStreamingPaused(false);
     this.stopGarageThumbnailGeneration();
     this.mode = 'title';
     this.paused = false;
@@ -800,6 +842,7 @@ for (let y = 4; y < 320; y += step) {
   private enterGarageStageLighting(): void {
     const width = this.container.clientWidth || window.innerWidth || 1280;
     const height = this.container.clientHeight || window.innerHeight || 720;
+    this.applyGraphicsProfile(false);
     if (this.garageBgTexture) {
       this.updateGarageBgCoverTransform(width, height);
       this.scene.background = this.garageBgTexture;
@@ -823,6 +866,82 @@ for (let y = 4; y < 320; y += step) {
     this.keyLight.shadow.camera.top = gd;
     this.keyLight.shadow.camera.bottom = -gd;
     this.keyLight.shadow.camera.updateProjectionMatrix();
+  }
+
+  public getGraphicsQuality(): GraphicsQuality {
+    return this.graphicsQuality;
+  }
+
+  public setGraphicsQuality(quality: GraphicsQuality): void {
+    this.graphicsQuality = quality;
+    saveGraphicsQuality(quality);
+    this.lowFpsWindows = 0;
+    this.highFpsWindows = 0;
+    this.applyGraphicsProfile(this.mode !== 'garage' && this.currentTrackDef.theme === 'sakura');
+    if (this.builtTrack) {
+      const focus = this.localRacers.find((racer) => racer.id === this.localId) ?? this.localRacers[0];
+      const profile = this.getResolvedGraphicsProfile();
+      if (focus) this.builtTrack.updateLod(focus.x, focus.z, profile.sceneryDistance);
+    }
+  }
+
+  private getResolvedGraphicsProfile(): GraphicsProfile {
+    const requestedLevel = this.graphicsQuality === 'AUTO' ? this.adaptiveLevel : this.graphicsQuality;
+    const level = this.isSoftwareGl ? 'LOW' : requestedLevel;
+    return GRAPHICS_PROFILES[level];
+  }
+
+  private applyGraphicsProfile(isSakura: boolean): void {
+    const profile = this.getResolvedGraphicsProfile();
+    this.renderer.setPixelRatio(
+      this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, profile.pixelRatioCap),
+    );
+    this.keyLight.castShadow = !this.isSoftwareGl && profile.shadows && !isSakura;
+    const shadowSize = Math.max(512, profile.shadowMapSize);
+    if (this.keyLight.shadow.mapSize.width !== shadowSize) {
+      this.keyLight.shadow.map?.dispose();
+      this.keyLight.shadow.map = null;
+      this.keyLight.shadow.mapSize.set(shadowSize, shadowSize);
+    }
+    const nextParticleCount = profile.particleCount;
+    for (let i = nextParticleCount; i < this.activeParticleCount; i++) {
+      const particle = this.particles[i];
+      if (particle) particle.active = false;
+    }
+    this.activeParticleCount = nextParticleCount;
+    this.activeRainCount = profile.particleCount === 90 ? 120 : profile.particleCount === 130 ? 190 : RAIN_DROP_COUNT;
+    this.particleMesh.count = this.activeParticleCount;
+    this.rainMesh.count = this.activeRainCount;
+  }
+
+  private updateAdaptiveQuality(now: number): void {
+    if (this.graphicsQuality !== 'AUTO' || this.isSoftwareGl) return;
+    this.adaptiveFrameCount++;
+    const elapsedMs = now - this.adaptiveWindowStart;
+    if (elapsedMs < 2500) return;
+
+    const fps = (this.adaptiveFrameCount * 1000) / elapsedMs;
+    this.adaptiveFrameCount = 0;
+    this.adaptiveWindowStart = now;
+    this.lowFpsWindows = fps < 48 ? this.lowFpsWindows + 1 : 0;
+    this.highFpsWindows = fps > 58 ? this.highFpsWindows + 1 : 0;
+    if (now < this.nextAdaptiveChangeAt) return;
+
+    const levels: GraphicsLevel[] = ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'];
+    const currentIndex = levels.indexOf(this.adaptiveLevel);
+    if (this.lowFpsWindows >= 2 && currentIndex > 0) {
+      this.adaptiveLevel = levels[currentIndex - 1];
+      this.lowFpsWindows = 0;
+      this.highFpsWindows = 0;
+      this.nextAdaptiveChangeAt = now + 5000;
+      this.applyGraphicsProfile(this.mode !== 'garage' && this.currentTrackDef.theme === 'sakura');
+    } else if (this.highFpsWindows >= 4 && currentIndex < levels.length - 1) {
+      this.adaptiveLevel = levels[currentIndex + 1];
+      this.lowFpsWindows = 0;
+      this.highFpsWindows = 0;
+      this.nextAdaptiveChangeAt = now + 8000;
+      this.applyGraphicsProfile(this.mode !== 'garage' && this.currentTrackDef.theme === 'sakura');
+    }
   }
 
   public setGarageStatsRightPx(rightPx: number): void {
@@ -860,6 +979,7 @@ for (let y = 4; y < 320; y += step) {
   }
 
   public enterGarageMode(car: VehicleConfig, driverName?: string): void {
+    setBackgroundStreamingPaused(false);
     this.mode = 'garage';
     this.paused = false;
     this.isOnline = false;
@@ -1130,6 +1250,7 @@ for (let y = 4; y < 320; y += step) {
     aiCount = 5,
     weather?: WeatherPreset,
   ): void {
+    setBackgroundStreamingPaused(true);
     this.stopGarageThumbnailGeneration();
     this.mode = 'race';
     this.paused = false;
@@ -1188,6 +1309,7 @@ for (let y = 4; y < 320; y += step) {
     trackDef: TrackDefinition,
     weather?: WeatherPreset,
   ): void {
+    setBackgroundStreamingPaused(true);
     this.stopGarageThumbnailGeneration();
     this.mode = 'race';
     this.paused = false;
@@ -1493,7 +1615,7 @@ for (let y = 4; y < 320; y += step) {
   private spawnParticles(x: number, y: number, z: number, count: number, colorHex: number, speed = 8): void {
     for (let i = 0; i < count; i++) {
       const p = this.particles[this.particleIdx];
-      this.particleIdx = (this.particleIdx + 1) % MAX_PARTICLES;
+      this.particleIdx = (this.particleIdx + 1) % this.activeParticleCount;
       p.active = true;
       p.x = x + (Math.random() - 0.5) * 0.8;
       p.y = y + Math.random() * 0.4;
@@ -1551,7 +1673,7 @@ for (let y = 4; y < 320; y += step) {
   }
 
   private updateParticles(dt: number): void {
-    for (let i = 0; i < MAX_PARTICLES; i++) {
+    for (let i = 0; i < this.activeParticleCount; i++) {
       const p = this.particles[i];
       if (!p.active) continue;
       p.life -= dt;
@@ -1581,9 +1703,22 @@ for (let y = 4; y < 320; y += step) {
   }
 
   private syncVisualCarRigs(dt: number): void {
+    const focusRacer =
+      this.localRacers.find((racer) => racer.id === this.localId) ?? this.localRacers[0];
+    const opponentDistance = this.getResolvedGraphicsProfile().opponentDistance;
+    const maxOpponentDistanceSq = opponentDistance * opponentDistance;
+
     for (const racer of this.localRacers) {
       const rig = this.carRigs.get(racer.id);
       if (!rig) continue;
+
+      if (this.mode === 'race' && focusRacer && racer.id !== focusRacer.id) {
+        const dx = racer.x - focusRacer.x;
+        const dz = racer.z - focusRacer.z;
+        rig.root.visible = dx * dx + dz * dz <= maxOpponentDistanceSq;
+      } else {
+        rig.root.visible = true;
+      }
 
       const correction =
         this.isOnline && racer.id === this.localId ? this.onlineVisualCorrection : null;
@@ -1624,7 +1759,8 @@ for (let y = 4; y < 320; y += step) {
   private tick = () => {
     if (this.disposed) return;
 
-    const now = performance.now();
+    const frameStart = performance.now();
+    const now = frameStart;
     const rawDt = (now - this.lastTime) / 1000;
     this.lastTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
@@ -1685,7 +1821,27 @@ for (let y = 4; y < 320; y += step) {
       this.updateRainParticles(dt);
     }
 
+    if (this.builtTrack && now - this.lastSceneryLodUpdateAt >= 200) {
+      const referenceRacer =
+        this.localRacers.find((racer) => racer.id === this.localId) ?? this.localRacers[0];
+      if (referenceRacer) {
+        this.builtTrack.updateLod(
+          referenceRacer.x,
+          referenceRacer.z,
+          this.getResolvedGraphicsProfile().sceneryDistance,
+        );
+        this.lastSceneryLodUpdateAt = now;
+      }
+    }
+
     this.renderer.render(this.scene, this.camera);
+    this.performanceMonitor.recordFrame(
+      rawDt * 1000,
+      performance.now() - frameStart,
+      this.renderer,
+      this.scene,
+    );
+    this.updateAdaptiveQuality(now);
 
     if (this.isSoftwareGl) {
       this.afterDraw(() => {
@@ -1915,6 +2071,7 @@ for (let y = 4; y < 320; y += step) {
     const cx = this.camera.position.x;
     const cz = this.camera.position.z;
     for (let i = 0; i < RAIN_DROP_COUNT; i++) {
+      if (i >= this.activeRainCount) break;
       const base = i * 4;
       let y = this.rainOffsets[base + 1] - this.rainOffsets[base + 3] * dt;
       if (y < 0.2) y = 23 + (y % 23);
@@ -1930,6 +2087,7 @@ for (let y = 4; y < 320; y += step) {
 
   public dispose(): void {
     this.disposed = true;
+    setBackgroundStreamingPaused(true);
     this.stopGarageThumbnailGeneration();
     cancelAnimationFrame(this.frameId);
     clearTimeout(this.frameId);
@@ -1945,6 +2103,7 @@ for (let y = 4; y < 320; y += step) {
     window.removeEventListener('pointerup', this.handlePointerUp);
     window.removeEventListener('pointercancel', this.handlePointerUp);
     this.resizeObserver.disconnect();
+    this.performanceMonitor.dispose();
 
     this.clearRaceCars();
     if (this.garageBgTexture) {

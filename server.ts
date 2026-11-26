@@ -490,6 +490,16 @@ async function bootstrap() {
 
   // Serve optimized 3D car models and textures with long-lived immutable HTTP cache headers
   app.use(
+    '/optimized-models',
+    express.static(path.resolve(process.cwd(), 'public/models-optimized'), {
+      maxAge: '365d',
+      immutable: true,
+    }),
+  );
+  app.use('/optimized-models', (_req, res) => {
+    res.status(404).end();
+  });
+  app.use(
     '/models',
     express.static(path.resolve(process.cwd(), 'public/models'), {
       maxAge: '365d',
