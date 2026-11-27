@@ -43,3 +43,24 @@ export function getAssetPerformanceStats(): AssetPerformanceStats {
     averageLoadMs: networkLoads ? networkLoadMs / networkLoads : 0,
   };
 }
+
+let backgroundPaused = false;
+let backgroundThrottleUntil = 0;
+
+export function setBackgroundStreamingPaused(paused: boolean): void {
+  backgroundPaused = paused;
+}
+
+export function isBackgroundStreamingPaused(): boolean {
+  return backgroundPaused;
+}
+
+export function reportBackgroundFrameMs(frameMs: number): void {
+  if (frameMs > 28) {
+    backgroundThrottleUntil = performance.now() + 1400;
+  }
+}
+
+export function isBackgroundStreamingThrottled(): boolean {
+  return backgroundPaused || performance.now() < backgroundThrottleUntil;
+}

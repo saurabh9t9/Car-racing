@@ -1,5 +1,10 @@
 import * as THREE from 'three';
-import { Sky } from 'three/examples/jsm/objects/Sky.js';
+import {
+  DEFAULT_SAKURA_FOOTPRINTS,
+  generateSakuraSceneryPlacements,
+  type PropFootprint,
+  type SakuraModelKey,
+} from '../shared/sceneryPlacement';
 import { computeTrackTurnSignage, sampleTrackAt } from '../shared/trackMath';
 import type { CompiledTrack, ObstacleKind, TrackTheme, WeatherPreset } from '../shared/types';
 import {
@@ -28,15 +33,15 @@ export const TRACK_THEMES: Record<TrackTheme, EnvironmentLightingProfile> = {
 
 function createAsphaltMicroBumpTexture(maxAnisotropy: number): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
+  canvas.width = 128;
+  canvas.height = 128;
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#808080';
-  ctx.fillRect(0, 0, 256, 256);
+  ctx.fillRect(0, 0, 128, 128);
 
-  for (let i = 0; i < 3600; i++) {
-    const x = Math.random() * 256;
-    const y = Math.random() * 256;
+  for (let i = 0; i < 1100; i++) {
+    const x = Math.random() * 128;
+    const y = Math.random() * 128;
     const bright = Math.random() > 0.5;
     ctx.fillStyle = bright ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.22)';
     ctx.fillRect(x, y, 2, 2);
@@ -45,7 +50,7 @@ function createAsphaltMicroBumpTexture(maxAnisotropy: number): THREE.CanvasTextu
   const bumpMap = new THREE.CanvasTexture(canvas);
   bumpMap.wrapS = THREE.RepeatWrapping;
   bumpMap.wrapT = THREE.RepeatWrapping;
-  bumpMap.anisotropy = maxAnisotropy;
+  bumpMap.anisotropy = Math.max(1, Math.min(4, maxAnisotropy));
   return bumpMap;
 }
 
@@ -61,7 +66,7 @@ function createDashedCenterTexture(maxAnisotropy: number): THREE.CanvasTexture {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = maxAnisotropy;
+  tex.anisotropy = Math.max(1, Math.min(4, maxAnisotropy));
   return tex;
 }
 
@@ -79,7 +84,7 @@ function createCurbTexture(primary: string, secondary: string, maxAnisotropy: nu
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.anisotropy = maxAnisotropy;
+  tex.anisotropy = Math.max(1, Math.min(4, maxAnisotropy));
   return tex;
 }
 
@@ -289,35 +294,33 @@ function buildBarrierWallGeometry(
 }
 
 function addSkyEnvironment(group: THREE.Group, palette: EnvironmentLightingProfile): void {
-  if (palette.skyMode === 'sky') {
-    const sky = new Sky();
-    sky.scale.setScalar(900);
-    const uniforms = sky.material.uniforms;
-    uniforms.turbidity.value = palette.skyTurbidity;
-    uniforms.rayleigh.value = palette.skyRayleigh;
-    uniforms.mieCoefficient.value = palette.skyMieCoefficient;
-    uniforms.mieDirectionalG.value = palette.skyMieDirectionalG;
-    const sunDir = new THREE.Vector3(...palette.sunDirection).normalize();
-    uniforms.sunPosition.value.copy(sunDir);
-    group.add(sky);
-    return;
-  }
-
-  // Vertex-colored sky dome for Rainy (storm overcast) and Night
-  const domeGeo = new THREE.SphereGeometry(520, 24, 16);
+  // Fast vertex-colored atmospheric dome across all presets (avoids expensive per-pixel Sky.js scattering shader)
+  const domeGeo = new THREE.SphereGeometry(520, 20, 14);
   const posAttr = domeGeo.attributes.position;
   const colors = new Float32Array(posAttr.count * 3);
   const zenithColor = new THREE.Color(palette.skyZenithColor);
   const midColor = new THREE.Color(palette.skyColor);
   const horizonColor = new THREE.Color(palette.fogColor);
+  const sunDir = new THREE.Vector3(...palette.sunDirection).normalize();
+  const sunGlow = new THREE.Color(palette.sunColor);
+  const vDir = new THREE.Vector3();
   const cTmp = new THREE.Color();
 
   for (let i = 0; i < posAttr.count; i++) {
-    const yNorm = Math.max(0, Math.min(1, posAttr.getY(i) / 520));
+    const vx = posAttr.getX(i);
+    const vy = posAttr.getY(i);
+    const vz = posAttr.getZ(i);
+    const yNorm = Math.max(0, Math.min(1, vy / 520));
     if (yNorm < 0.28) {
       cTmp.copy(horizonColor).lerp(midColor, yNorm / 0.28);
     } else {
       cTmp.copy(midColor).lerp(zenithColor, (yNorm - 0.28) / 0.72);
+    }
+    if (palette.skyMode === 'sky' && vy > -20) {
+      vDir.set(vx, vy, vz).normalize();
+      const align = Math.max(0, vDir.dot(sunDir));
+      const halo = Math.pow(align, 14) * 0.42;
+      cTmp.lerp(sunGlow, halo);
     }
     colors[i * 3] = cTmp.r;
     colors[i * 3 + 1] = cTmp.g;
@@ -331,6 +334,21 @@ function addSkyEnvironment(group: THREE.Group, palette: EnvironmentLightingProfi
     fog: false,
   });
   group.add(new THREE.Mesh(domeGeo, domeMat));
+
+  if (palette.skyMode === 'sky') {
+    const sunDisc = new THREE.Mesh(
+      new THREE.CircleGeometry(22, 16),
+      new THREE.MeshBasicMaterial({
+        color: palette.sunColor,
+        fog: false,
+        depthWrite: false,
+      }),
+    );
+    sunDisc.position.copy(sunDir).multiplyScalar(470);
+    sunDisc.lookAt(0, 0, 0);
+    group.add(sunDisc);
+    return;
+  }
 
   if (!palette.showStars) return;
 
@@ -358,6 +376,20 @@ function addSkyEnvironment(group: THREE.Group, palette: EnvironmentLightingProfi
   group.add(new THREE.Points(starGeo, starMat));
 }
 
+let sharedBeaconMat: THREE.MeshStandardMaterial | null = null;
+function getSharedBeaconMat(): THREE.MeshStandardMaterial {
+  if (!sharedBeaconMat) {
+    sharedBeaconMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b,
+      emissive: 0xf59e0b,
+      emissiveIntensity: 1.4,
+      roughness: 0.2,
+    });
+    sharedBeaconMat.userData.sharedEnvMat = true;
+  }
+  return sharedBeaconMat;
+}
+
 function buildObstacleMesh(
   kind: ObstacleKind,
   concreteTex: THREE.Texture,
@@ -374,14 +406,9 @@ function buildObstacleMesh(
       whiteBarrier.position.set(1.1, 0, 0);
       obsGroup.add(redBarrier, whiteBarrier);
 
-      const beaconMat = new THREE.MeshStandardMaterial({
-        color: 0xf59e0b,
-        emissive: 0xf59e0b,
-        emissiveIntensity: 1.4,
-        roughness: 0.2,
-      });
+      const beaconMat = getSharedBeaconMat();
       for (const bx of [-1.1, 1.1]) {
-        const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.2, 10), beaconMat);
+        const beacon = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.2, 8), beaconMat);
         beacon.position.set(bx, 1.56, 0);
         obsGroup.add(beacon);
       }
@@ -469,13 +496,14 @@ interface SceneryLodChunk {
   group: THREE.Group;
   centerX: number;
   centerZ: number;
+  radius: number;
 }
 
 function addInstancedGlbProps(
   group: THREE.Group,
   modelId: EnvModelId,
   placements: SceneryPlacement[],
-  castShadows = true,
+  castShadows = false,
   lodChunks?: SceneryLodChunk[],
 ): boolean {
   if (placements.length === 0) return true;
@@ -483,10 +511,24 @@ function addInstancedGlbProps(
   const asset = getEnvAsset(modelId);
   if (!asset || asset.parts.length === 0) return false;
 
-  const buckets = new Map<string, { placements: SceneryPlacement[]; x: number; z: number }>();
-  const chunkSize = 260;
-  if (!lodChunks) {
-    buckets.set('all', { placements, x: 0, z: 0 });
+  const buckets = new Map<string, { placements: SceneryPlacement[]; x: number; z: number; radius: number }>();
+  const chunkSize = 50;
+  const assetHorizRadius = Math.hypot(asset.size.x, asset.size.z) * 0.5;
+  if (!lodChunks || placements.length <= 2) {
+    let sx = 0;
+    let sz = 0;
+    for (const p of placements) {
+      sx += p.x;
+      sz += p.z;
+    }
+    const cx = sx / placements.length;
+    const cz = sz / placements.length;
+    let maxR = 0;
+    for (const p of placements) {
+      const r = Math.hypot(p.x - cx, p.z - cz);
+      if (r > maxR) maxR = r;
+    }
+    buckets.set('all', { placements, x: cx, z: cz, radius: maxR + assetHorizRadius });
   } else {
     for (const placement of placements) {
       const cellX = Math.floor(placement.x / chunkSize);
@@ -496,12 +538,29 @@ function addInstancedGlbProps(
       if (!bucket) {
         bucket = {
           placements: [],
-          x: (cellX + 0.5) * chunkSize,
-          z: (cellZ + 0.5) * chunkSize,
+          x: 0,
+          z: 0,
+          radius: 0,
         };
         buckets.set(key, bucket);
       }
       bucket.placements.push(placement);
+    }
+    for (const bucket of buckets.values()) {
+      let sx = 0;
+      let sz = 0;
+      for (const p of bucket.placements) {
+        sx += p.x;
+        sz += p.z;
+      }
+      bucket.x = sx / bucket.placements.length;
+      bucket.z = sz / bucket.placements.length;
+      let maxR = 0;
+      for (const p of bucket.placements) {
+        const r = Math.hypot(p.x - bucket.x, p.z - bucket.z);
+        if (r > maxR) maxR = r;
+      }
+      bucket.radius = maxR + assetHorizRadius;
     }
   }
 
@@ -512,7 +571,7 @@ function addInstancedGlbProps(
     if (lodChunks) {
       batchRoot.name = `scenery-${modelId}`;
       group.add(batchRoot);
-      lodChunks.push({ group: batchRoot, centerX: bucket.x, centerZ: bucket.z });
+      lodChunks.push({ group: batchRoot, centerX: bucket.x, centerZ: bucket.z, radius: bucket.radius });
     }
 
     for (const part of asset.parts) {
@@ -545,6 +604,7 @@ export interface BuiltTrackScene {
   palette: EnvironmentLightingProfile;
   obstacleMeshes: Map<string, THREE.Group>;
   updateLod: (x: number, z: number, maxDistance: number) => void;
+  setLowDetailMode: (lowDetail: boolean) => void;
   dispose: () => void;
 }
 
@@ -568,7 +628,7 @@ export function buildTrackScene(
   addSkyEnvironment(group, palette);
 
   // 1. Extended Ground Terrain with biome-matched real photorealistic surface texture
-  const terrainGeo = new THREE.CircleGeometry(750, 56);
+  const terrainGeo = new THREE.CircleGeometry(750, 36);
   terrainGeo.rotateX(-Math.PI * 0.5);
   const terrainMat = new THREE.MeshStandardMaterial({
     color: palette.terrainColor,
@@ -584,7 +644,7 @@ export function buildTrackScene(
 
   // Coastal Ocean Rim: expansive reflective turquoise sea encircling coastal highway cliffs
   if (track.def.theme === 'coastal') {
-    const oceanGeo = new THREE.RingGeometry(245, 760, 64);
+    const oceanGeo = new THREE.RingGeometry(245, 760, 40);
     oceanGeo.rotateX(-Math.PI * 0.5);
     const oceanMat = new THREE.MeshStandardMaterial({
       color: palette.weather === 'night' ? 0x0c3454 : palette.weather === 'rainy' ? 0x2c5670 : 0x0c7fa8,
@@ -761,8 +821,9 @@ export function buildTrackScene(
     group.add(gantry);
   }
 
-  // Real .GLB Grandstand & Pit Complex near Start/Finish
-  const placeTracksideProp = (
+  // Real .GLB Grandstand & Pit Complex near Start/Finish (batched via InstancedMesh + LOD chunks)
+  const tracksideBatches = new Map<EnvModelId, SceneryPlacement[]>();
+  const queueTracksideProp = (
     modelId: EnvModelId,
     t: number,
     lateralOffset: number,
@@ -770,34 +831,43 @@ export function buildTrackScene(
     scale = 1,
     extraYaw = 0,
   ) => {
-    const model = cloneEnvAssetGroup(modelId);
-    if (!model) return;
     const s = sampleTrackAt(track, t);
     const yaw = Math.atan2(s.tx, s.tz);
-    model.position.set(s.x + s.nx * lateralOffset, 0, s.z + s.nz * lateralOffset);
     const inwardRot = faceInward ? (lateralOffset >= 0 ? Math.PI * 0.5 : -Math.PI * 0.5) : 0;
-    model.rotation.y = yaw + inwardRot + extraYaw;
-    model.scale.setScalar(scale);
-    group.add(model);
+    let list = tracksideBatches.get(modelId);
+    if (!list) {
+      list = [];
+      tracksideBatches.set(modelId, list);
+    }
+    list.push({
+      x: s.x + s.nx * lateralOffset,
+      z: s.z + s.nz * lateralOffset,
+      scale,
+      rotY: yaw + inwardRot + extraYaw,
+    });
   };
 
   // Covered Grandstands + Race Control Pit Office + Pit Garages + Team Tents around Start Straight
   const paddockLateral = halfW + 14.5;
-  placeTracksideProp('grandstand_covered', 0.975, paddockLateral, true, 1.25);
-  placeTracksideProp('grandstand_covered', 0.028, paddockLateral, true, 1.25);
-  placeTracksideProp('pits_office', 0.942, paddockLateral + 1.5, true, 1.15);
-  placeTracksideProp('pits_garage', 0.96, -paddockLateral, true, 1.1);
-  placeTracksideProp('pits_garage', 0.005, -paddockLateral, true, 1.1);
-  placeTracksideProp('tent', 0.048, -paddockLateral, true, 1.15);
-  placeTracksideProp('tent', 0.07, -paddockLateral, true, 1.15);
-  placeTracksideProp('flag_checkers', 0.012, halfW + 6.4, true, 1.0);
+  queueTracksideProp('grandstand_covered', 0.975, paddockLateral, true, 1.25);
+  queueTracksideProp('grandstand_covered', 0.028, paddockLateral, true, 1.25);
+  queueTracksideProp('pits_office', 0.942, paddockLateral + 1.5, true, 1.15);
+  queueTracksideProp('pits_garage', 0.96, -paddockLateral, true, 1.1);
+  queueTracksideProp('pits_garage', 0.005, -paddockLateral, true, 1.1);
+  queueTracksideProp('tent', 0.048, -paddockLateral, true, 1.15);
+  queueTracksideProp('tent', 0.07, -paddockLateral, true, 1.15);
+  queueTracksideProp('flag_checkers', 0.012, halfW + 6.4, true, 1.0);
 
   // Trackside Billboards, Banner Towers & Floodlight Posts along the circuit
   const circuitMarkers = [0.14, 0.28, 0.42, 0.56, 0.70, 0.84];
   circuitMarkers.forEach((mt, idx) => {
     const side = idx % 2 === 0 ? 1 : -1;
-    placeTracksideProp(idx % 3 === 0 ? 'banner_tower' : 'billboard', mt, side * (halfW + 8.6), true, 1.0);
+    queueTracksideProp(idx % 3 === 0 ? 'banner_tower' : 'billboard', mt, side * (halfW + 8.6), true, 1.0);
   });
+
+  for (const [modelId, list] of tracksideBatches.entries()) {
+    addInstancedGlbProps(group, modelId, list, false, sceneryLodChunks);
+  }
 
   // Stadium Light Posts via InstancedMesh along the track (dense in Night & Rainy weather or Midnight track)
   const lightPostCount = palette.lightPostCount;
@@ -815,26 +885,36 @@ export function buildTrackScene(
       rotY: yaw,
     });
   }
-  addInstancedGlbProps(group, 'light_post', lightPostPlacements);
+  addInstancedGlbProps(group, 'light_post', lightPostPlacements, false, sceneryLodChunks);
 
-  // 6. Boost Pads along track
-  const boostMat = new THREE.MeshStandardMaterial({
-    color: 0x0ea5e9,
-    emissive: 0x0ea5e9,
-    emissiveIntensity: 1.15,
-    roughness: 0.25,
-  });
-  const padFrameMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5, metalness: 0.4 });
-  for (const padT of track.def.boostPads) {
-    const ps = sampleTrackAt(track, padT);
-    const padGroup = new THREE.Group();
-    padGroup.position.set(ps.x, 0.055, ps.z);
-    padGroup.rotation.y = Math.atan2(ps.tx, ps.tz);
+  // 6. Boost Pads along track (2 InstancedMeshes total)
+  if (track.def.boostPads.length > 0) {
+    const boostMat = new THREE.MeshStandardMaterial({
+      color: 0x0ea5e9,
+      emissive: 0x0ea5e9,
+      emissiveIntensity: 1.15,
+      roughness: 0.25,
+    });
+    const padFrameMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.5, metalness: 0.4 });
+    const frameGeo = new THREE.BoxGeometry(4.7, 0.06, 7.6);
+    const coreGeo = new THREE.BoxGeometry(4.0, 0.09, 6.8);
+    const framesInst = new THREE.InstancedMesh(frameGeo, padFrameMat, track.def.boostPads.length);
+    const coresInst = new THREE.InstancedMesh(coreGeo, boostMat, track.def.boostPads.length);
 
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(4.7, 0.06, 7.6), padFrameMat);
-    const core = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.09, 6.8), boostMat);
-    padGroup.add(frame, core);
-    group.add(padGroup);
+    track.def.boostPads.forEach((padT, idx) => {
+      const ps = sampleTrackAt(track, padT);
+      dummy.position.set(ps.x, 0.055, ps.z);
+      dummy.rotation.set(0, Math.atan2(ps.tx, ps.tz), 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      framesInst.setMatrixAt(idx, dummy.matrix);
+      coresInst.setMatrixAt(idx, dummy.matrix);
+    });
+    framesInst.instanceMatrix.needsUpdate = true;
+    coresInst.instanceMatrix.needsUpdate = true;
+    framesInst.computeBoundingSphere();
+    coresInst.computeBoundingSphere();
+    group.add(framesInst, coresInst);
   }
 
   // 7. Interactive Track Obstacles (Real .GLB Barricades & Pylons + Tire Stacks)
@@ -847,7 +927,7 @@ export function buildTrackScene(
     obstacleMeshes.set(obs.id, mesh);
   }
 
-    // 8. Real .GLB Trackside Biome Scenery
+  // 8. Real .GLB Trackside Biome Scenery
   const placements: Array<{
     x: number;
     z: number;
@@ -858,34 +938,41 @@ export function buildTrackScene(
 
   const isSakura = track.def.theme === 'sakura';
 
-  // Sakura gets dense, track-following scenery.
-  // All other themes, including Midnight, use the original placement pattern.
   if (isSakura) {
-    // Keep the Sakura look, with fewer off-track props to reduce GPU work.
-    const stationCount = 28;
-    const laneOffsets = [25, 55];
+    const liveFootprints: Partial<Record<SakuraModelKey, PropFootprint>> = {
+      ...DEFAULT_SAKURA_FOOTPRINTS,
+    };
+    for (const key of Object.keys(DEFAULT_SAKURA_FOOTPRINTS) as SakuraModelKey[]) {
+      const asset = getEnvAsset(key);
+      if (asset) {
+        liveFootprints[key] = { sizeX: asset.size.x, sizeZ: asset.size.z };
+      }
+    }
 
-    let seed = 0;
+    const sakuraItems = generateSakuraSceneryPlacements(track, liveFootprints);
+    const byModel = new Map<SakuraModelKey, SceneryPlacement[]>();
+    for (const item of sakuraItems) {
+      let list = byModel.get(item.modelId);
+      if (!list) {
+        list = [];
+        byModel.set(item.modelId, list);
+      }
+      list.push({
+        x: item.x,
+        z: item.z,
+        scale: item.scale,
+        rotY: item.rotY,
+      });
+    }
 
-    for (let station = 0; station < stationCount; station++) {
-      const t = station / stationCount;
-      const s = sampleTrackAt(track, t);
-
-      for (const side of [-1, 1]) {
-        for (let lane = 0; lane < laneOffsets.length; lane++) {
-          seed++;
-
-          const jitter = ((seed * 17.17) % 5.5) - 2.75;
-          const lateral = side * (halfW + laneOffsets[lane] + jitter);
-
-          placements.push({
-            x: s.x + s.nx * lateral,
-            z: s.z + s.nz * lateral,
-            scale: 0.88 + ((seed * 0.31) % 0.42),
-            rot: (seed * 2.39996) % (Math.PI * 2),
-            seed,
-          });
-        }
+    for (const [modelId, list] of byModel.entries()) {
+      const added = addInstancedGlbProps(group, modelId, list, false, sceneryLodChunks);
+      if (!added) {
+        const fallbackId: EnvModelId =
+          modelId === 'sakura_cherry_trees' || modelId === 'sakura_japanese_temple' || modelId === 'sakura_chinese_hall'
+            ? 'env_spruce_trees'
+            : 'env_stylized_rocks';
+        addInstancedGlbProps(group, fallbackId, list, false, sceneryLodChunks);
       }
     }
   } else {
@@ -1109,144 +1196,6 @@ export function buildTrackScene(
     }
 
     // ---------------------------------------------------------
-    // SAKURA PASS
-    // New Japanese assets have priority.
-    // Original trees and rocks are secondary filler.
-    // ---------------------------------------------------------
-    else if (track.def.theme === 'sakura') {
-      const addSakuraProps = (
-        modelId: EnvModelId,
-        placements: SceneryPlacement[],
-      ) => addInstancedGlbProps(group, modelId, placements, false, sceneryLodChunks);
-
-      const cherryTrees: SceneryPlacement[] = [];
-      const temples: SceneryPlacement[] = [];
-      const halls: SceneryPlacement[] = [];
-      const fantasyBuildings: SceneryPlacement[] = [];
-      const architecture: SceneryPlacement[] = [];
-      const lamps: SceneryPlacement[] = [];
-      const drums: SceneryPlacement[] = [];
-      const statues: SceneryPlacement[] = [];
-
-      const originalTrees: SceneryPlacement[] = [];
-      const originalRocks: SceneryPlacement[] = [];
-
-      placements.forEach((pl, idx) => {
-        const mod = idx % 32;
-
-        const item: SceneryPlacement = {
-          x: pl.x,
-          z: pl.z,
-          scale: pl.scale,
-          rotY: pl.rot,
-        };
-
-        if (mod < 13) {
-          cherryTrees.push(item);
-        } else if (mod < 16) {
-          originalTrees.push({
-            ...item,
-            scale: pl.scale * 0.78,
-          });
-        } else if (mod < 18) {
-          temples.push({
-            ...item,
-            scale: pl.scale * 1.05,
-          });
-        } else if (mod < 20) {
-          halls.push({
-            ...item,
-            scale: pl.scale * 0.95,
-          });
-        } else if (mod < 22) {
-          fantasyBuildings.push({
-            ...item,
-            scale: pl.scale * 0.9,
-          });
-        } else if (mod < 24) {
-          architecture.push({
-            ...item,
-            scale: pl.scale * 0.9,
-          });
-        } else if (mod < 27) {
-          lamps.push({
-            ...item,
-            scale: pl.scale * 0.72,
-          });
-        } else if (mod < 28) {
-          drums.push({
-            ...item,
-            scale: pl.scale * 0.65,
-          });
-        } else if (mod < 29) {
-          statues.push({
-            ...item,
-            scale: pl.scale * 0.55,
-          });
-        } else {
-          originalRocks.push({
-            ...item,
-            scale: pl.scale * 0.8,
-          });
-        }
-      });
-
-      const hasCherry = addSakuraProps('sakura_cherry_trees', cherryTrees);
-
-      const hasTemple = addSakuraProps('sakura_japanese_temple', temples);
-
-      const hasHall = addSakuraProps('sakura_chinese_hall', halls);
-
-      const hasFantasy = addSakuraProps('sakura_fantasy_architecture', fantasyBuildings);
-
-      const hasArchitecture = addSakuraProps('sakura_chinese_architecture', architecture);
-
-      const hasLamps = addSakuraProps('sakura_lamp_pagoda', lamps);
-
-      const hasDrums = addSakuraProps('sakura_drum', drums);
-
-      const hasStatues = addSakuraProps('sakura_statue', statues);
-
-      // Fallbacks if a new Sakura asset is unavailable.
-      if (!hasCherry) {
-        addSakuraProps('env_cherry_blossom', cherryTrees);
-      }
-
-      if (!hasTemple) {
-        addSakuraProps('pine_tall_b', temples);
-      }
-
-      if (!hasHall) {
-        addSakuraProps('pine_round', halls);
-      }
-
-      if (!hasFantasy) {
-        addSakuraProps('pine_tall_a', fantasyBuildings);
-      }
-
-      if (!hasArchitecture) {
-        addSakuraProps('pine_tall_b', architecture);
-      }
-
-      if (!hasLamps) {
-        addSakuraProps('pine_round', lamps);
-      }
-
-      if (!hasDrums) {
-        addSakuraProps('rock_large', drums);
-      }
-
-      if (!hasStatues) {
-        addSakuraProps('rock_large', statues);
-      }
-
-      // Original scenery as secondary filler.
-      addSakuraProps('env_spruce_trees', originalTrees);
-
-      addSakuraProps('env_stylized_rocks', originalRocks);
-    }
-
-    // ---------------------------------------------------------
     // MIDNIGHT MARINA
     // Original assets ONLY. No new Marine GLBs.
     // ---------------------------------------------------------
@@ -1333,12 +1282,20 @@ export function buildTrackScene(
         envObj.rotation.y = pl.rot;
         envObj.scale.setScalar(pl.scale);
 
-        group.add(envObj);
+        const customChunk = new THREE.Group();
+        customChunk.add(envObj);
+        group.add(customChunk);
+        sceneryLodChunks.push({
+          group: customChunk,
+          centerX: envObj.position.x,
+          centerZ: envObj.position.z,
+          radius: 9,
+        });
       }
     }
   }
 
-  // 9. Curvature-Driven Motorsport Signage (Apex Chevrons + 150m / 100m / 50m Braking Boards)
+  // 9. Curvature-Driven Motorsport Signage (Instanced Apex Chevrons + 150m / 100m / 50m Braking Boards)
   const signage = computeTrackTurnSignage(track);
   const chevronTex = createApexChevronTexture();
   const boardTex150 = createBrakingBoardTexture('150');
@@ -1346,6 +1303,23 @@ export function buildTrackScene(
   const boardTex50 = createBrakingBoardTexture('50');
   const signPostMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.35 });
   const signPostGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.9, 6);
+
+  const postTransforms: THREE.Matrix4[] = [];
+  const signDummy = new THREE.Object3D();
+  const postOffsetObj = new THREE.Object3D();
+
+  const pushPostAt = (x: number, z: number, yaw: number, localX: number) => {
+    signDummy.position.set(x, 0, z);
+    signDummy.rotation.set(0, yaw, 0);
+    signDummy.scale.set(1, 1, 1);
+    signDummy.updateMatrix();
+    postOffsetObj.position.set(localX, 0.95, 0);
+    postOffsetObj.rotation.set(0, 0, 0);
+    postOffsetObj.scale.set(1, 1, 1);
+    postOffsetObj.updateMatrix();
+    const m = new THREE.Matrix4().multiplyMatrices(signDummy.matrix, postOffsetObj.matrix);
+    postTransforms.push(m);
+  };
 
   if (signage.apexChevrons.length > 0) {
     const chevronMat = new THREE.MeshStandardMaterial({
@@ -1355,19 +1329,19 @@ export function buildTrackScene(
       side: THREE.DoubleSide,
     });
     const chevronGeo = new THREE.BoxGeometry(2.9, 1.15, 0.12);
-    for (const c of signage.apexChevrons) {
-      const signGroup = new THREE.Group();
-      signGroup.position.set(c.x, 0, c.z);
-      signGroup.rotation.y = c.yaw;
-      const postL = new THREE.Mesh(signPostGeo, signPostMat);
-      postL.position.set(-0.95, 0.95, 0);
-      const postR = new THREE.Mesh(signPostGeo, signPostMat);
-      postR.position.set(0.95, 0.95, 0);
-      const board = new THREE.Mesh(chevronGeo, chevronMat);
-      board.position.set(0, 1.55, 0);
-      signGroup.add(postL, postR, board);
-      group.add(signGroup);
-    }
+    const chevronInst = new THREE.InstancedMesh(chevronGeo, chevronMat, signage.apexChevrons.length);
+    signage.apexChevrons.forEach((c, idx) => {
+      pushPostAt(c.x, c.z, c.yaw, -0.95);
+      pushPostAt(c.x, c.z, c.yaw, 0.95);
+      signDummy.position.set(c.x, 1.55, c.z);
+      signDummy.rotation.set(0, c.yaw, 0);
+      signDummy.scale.set(1, 1, 1);
+      signDummy.updateMatrix();
+      chevronInst.setMatrixAt(idx, signDummy.matrix);
+    });
+    chevronInst.instanceMatrix.needsUpdate = true;
+    chevronInst.computeBoundingSphere();
+    group.add(chevronInst);
   }
 
   if (signage.brakingBoards.length > 0) {
@@ -1377,17 +1351,43 @@ export function buildTrackScene(
       '100': new THREE.MeshStandardMaterial({ map: boardTex100, roughness: 0.4, side: THREE.DoubleSide }),
       '50': new THREE.MeshStandardMaterial({ map: boardTex50, roughness: 0.4, side: THREE.DoubleSide }),
     };
+    const groupedBoards: Record<'150' | '100' | '50', typeof signage.brakingBoards> = {
+      '150': [],
+      '100': [],
+      '50': [],
+    };
     for (const b of signage.brakingBoards) {
-      const signGroup = new THREE.Group();
-      signGroup.position.set(b.x, 0, b.z);
-      signGroup.rotation.y = b.yaw;
-      const post = new THREE.Mesh(signPostGeo, signPostMat);
-      post.position.set(0, 0.95, 0);
-      const face = new THREE.Mesh(boardGeo, boardMats[b.distanceLabel]);
-      face.position.set(0, 1.85, 0);
-      signGroup.add(post, face);
-      group.add(signGroup);
+      pushPostAt(b.x, b.z, b.yaw, 0);
+      groupedBoards[b.distanceLabel].push(b);
     }
+    for (const label of ['150', '100', '50'] as const) {
+      const list = groupedBoards[label];
+      if (list.length === 0) continue;
+      const inst = new THREE.InstancedMesh(boardGeo, boardMats[label], list.length);
+      list.forEach((b, idx) => {
+        signDummy.position.set(b.x, 1.85, b.z);
+        signDummy.rotation.set(0, b.yaw, 0);
+        signDummy.scale.set(1, 1, 1);
+        signDummy.updateMatrix();
+        inst.setMatrixAt(idx, signDummy.matrix);
+      });
+      inst.instanceMatrix.needsUpdate = true;
+      inst.computeBoundingSphere();
+      group.add(inst);
+    }
+  }
+
+  if (postTransforms.length > 0) {
+    const postsInst = new THREE.InstancedMesh(signPostGeo, signPostMat, postTransforms.length);
+    for (let i = 0; i < postTransforms.length; i++) {
+      postsInst.setMatrixAt(i, postTransforms[i]);
+    }
+    postsInst.instanceMatrix.needsUpdate = true;
+    postsInst.computeBoundingSphere();
+    group.add(postsInst);
+  } else {
+    signPostGeo.dispose();
+    signPostMat.dispose();
   }
 
   const dispose = () => {
@@ -1425,20 +1425,31 @@ export function buildTrackScene(
   const updateLod = (x: number, z: number, maxDistance: number) => {
     if (!Number.isFinite(x) || !Number.isFinite(z)) return;
     if (
-      Math.abs(x - lastLodX) < 18 &&
-      Math.abs(z - lastLodZ) < 18 &&
+      Math.abs(x - lastLodX) < 8 &&
+      Math.abs(z - lastLodZ) < 8 &&
       maxDistance === lastLodDistance
     ) return;
     lastLodX = x;
     lastLodZ = z;
     lastLodDistance = maxDistance;
-    const lodDistanceSq = maxDistance * maxDistance;
     for (const chunk of sceneryLodChunks) {
       const dx = chunk.centerX - x;
       const dz = chunk.centerZ - z;
-      chunk.group.visible = dx * dx + dz * dz <= lodDistanceSq;
+      const paddedDist = maxDistance + chunk.radius + 6;
+      chunk.group.visible = dx * dx + dz * dz <= paddedDist * paddedDist;
     }
   };
 
-  return { group, palette, obstacleMeshes, updateLod, dispose };
+  let currentLowDetail: boolean | null = null;
+  const setLowDetailMode = (lowDetail: boolean) => {
+    if (currentLowDetail === lowDetail) return;
+    currentLowDetail = lowDetail;
+    const targetBump = lowDetail ? null : asphaltBump;
+    if (roadMat.bumpMap !== targetBump) {
+      roadMat.bumpMap = targetBump;
+      roadMat.needsUpdate = true;
+    }
+  };
+
+  return { group, palette, obstacleMeshes, updateLod, setLowDetailMode, dispose };
 }

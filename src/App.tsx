@@ -5,17 +5,23 @@ import { LobbyModal } from './components/LobbyModal';
 import { MapSelectModal } from './components/MapSelectModal';
 import { PauseModal, ResultsModal } from './components/PauseResultsModal';
 import { RaceHud, type VirtualControlKey } from './components/RaceHud';
+import { TitleSettingsModal } from './components/SettingsModal';
 import { TitleOverlay } from './components/TitleOverlay';
 import { TrackStudioModal } from './components/TrackStudioModal';
 import { soundEngine } from './game/audio';
 import type { StartupLoadProgress } from './game/customModels';
 import { RaceEngine, type HudTelemetry } from './game/RaceEngine';
+import type { AudioChannelId, AudioMixSettings } from './shared/audioSettings';
 import {
   loadHudSettings,
   saveHudSettings,
   type HudSettings,
 } from './shared/hudSettings';
 import { loadGraphicsQuality, type GraphicsQuality } from './shared/graphicsQuality';
+import {
+  INITIAL_PERF_TELEMETRY,
+  type PerformanceTelemetrySnapshot,
+} from './shared/perfTelemetry';
 import { DEFAULT_CAR_CONFIG } from './shared/physics';
 import { STARTER_TRACKS } from './shared/trackMath';
 import type {
@@ -91,11 +97,17 @@ export default function App() {
   const [car, setCar] = useState<VehicleConfig>(loadSavedCar);
   const [carThumbnails, setCarThumbnails] = useState<Record<string, string>>({});
   const [modelLoading, setModelLoading] = useState<boolean>(false);
-  const [muted, setMuted] = useState<boolean>(false);
+  const [volume, setVolume] = useState<number>(() => soundEngine.getVolume());
+  const [audioMix, setAudioMix] = useState<AudioMixSettings>(() => soundEngine.getMix());
+  const [muted, setMuted] = useState<boolean>(() => soundEngine.isMuted());
   const [hud, setHud] = useState<HudTelemetry>(INITIAL_HUD);
+  const [perfTelemetry, setPerfTelemetry] = useState<PerformanceTelemetrySnapshot>(
+    INITIAL_PERF_TELEMETRY,
+  );
   const [hudSettings, setHudSettings] = useState<HudSettings>(loadHudSettings);
   const [graphicsQuality, setGraphicsQuality] = useState<GraphicsQuality>(loadGraphicsQuality);
   const [hudSettingsOpen, setHudSettingsOpen] = useState<boolean>(false);
+  const [titleSettingsOpen, setTitleSettingsOpen] = useState<boolean>(false);
 
   // Multiplayer WebSocket state
   const [wsConnected, setWsConnected] = useState(false);
@@ -121,6 +133,10 @@ export default function App() {
   const roomRef = useRef(room);
   const playerIdRef = useRef(playerId);
   playerIdRef.current = playerId;
+  const titleSettingsOpenRef = useRef(titleSettingsOpen);
+  titleSettingsOpenRef.current = titleSettingsOpen;
+  const hudSettingsOpenRef = useRef(hudSettingsOpen);
+  hudSettingsOpenRef.current = hudSettingsOpen;
 
   const selectedTrack = tracks.find((t) => t.id === selectedTrackId) ?? tracks[0];
 
@@ -322,6 +338,9 @@ export default function App() {
       (loading: boolean) => {
         setModelLoading(loading);
       },
+      (perf: PerformanceTelemetrySnapshot) => {
+        setPerfTelemetry(perf);
+      },
     );
     engineRef.current = engine;
 
@@ -375,6 +394,27 @@ export default function App() {
       const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
       if (typing) return;
 
+      if (screenRef.current === 'title' && titleSettingsOpenRef.current) {
+        if (e.code === 'Escape') {
+          e.preventDefault();
+          setTitleSettingsOpen(false);
+        } else if (e.code === 'KeyM') {
+          const nextMuted = !soundEngine.isMuted();
+          soundEngine.setMuted(nextMuted);
+          setMuted(nextMuted);
+          setVolume(soundEngine.getVolume());
+          setAudioMix(soundEngine.getMix());
+        }
+        return;
+      }
+
+      if (screenRef.current === 'playing' && hudSettingsOpenRef.current && e.code === 'Escape') {
+        e.preventDefault();
+        setHudSettingsOpen(false);
+        engineRef.current?.setPaused(false);
+        return;
+      }
+
       if (screenRef.current === 'title' && (e.code === 'Enter' || e.code === 'Space')) {
         e.preventDefault();
         startSoloRace();
@@ -393,6 +433,8 @@ export default function App() {
         const nextMuted = !soundEngine.isMuted();
         soundEngine.setMuted(nextMuted);
         setMuted(nextMuted);
+        setVolume(soundEngine.getVolume());
+        setAudioMix(soundEngine.getMix());
       }
     };
 
@@ -400,11 +442,32 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [startSoloRace]);
 
-  const handleToggleMute = () => {
-    const next = !muted;
+  const handleToggleMute = useCallback(() => {
+    const next = !soundEngine.isMuted();
     soundEngine.setMuted(next);
     setMuted(next);
-  };
+    setVolume(soundEngine.getVolume());
+    setAudioMix(soundEngine.getMix());
+  }, []);
+
+  const handleChangeVolume = useCallback((nextVolume: number) => {
+    soundEngine.setVolume(nextVolume);
+    setVolume(soundEngine.getVolume());
+    setAudioMix(soundEngine.getMix());
+    setMuted(soundEngine.isMuted());
+  }, []);
+
+  const handleChangeChannelVolume = useCallback((channel: AudioChannelId, nextVolume: number) => {
+    soundEngine.setChannelVolume(channel, nextVolume);
+    setAudioMix(soundEngine.getMix());
+    setVolume(soundEngine.getVolume());
+    setMuted(soundEngine.isMuted());
+  }, []);
+
+  const handleChangeGraphicsQuality = useCallback((quality: GraphicsQuality) => {
+    setGraphicsQuality(quality);
+    engineRef.current?.setGraphicsQuality(quality);
+  }, []);
 
   const handleToggleHudSettings = useCallback((open: boolean) => {
     setHudSettingsOpen(open);
@@ -474,20 +537,48 @@ export default function App() {
 
       {screen === 'title' && (
         <TitleOverlay
-          onQuickRace={() => startSoloRace()}
+          onQuickRace={() => {
+            setTitleSettingsOpen(false);
+            startSoloRace();
+          }}
           onOpenMultiplayer={() => {
+            setTitleSettingsOpen(false);
             setLobbyError(null);
             setScreen('lobby');
           }}
           onOpenGarage={() => {
+            setTitleSettingsOpen(false);
             setScreen('garage');
             engineRef.current?.enterGarageMode(car, playerName);
             engineRef.current?.startGarageThumbnailGeneration(car.modelId, setCarThumbnails);
           }}
-          onOpenMap={() => setScreen('map')}
-          onOpenStudio={() => setScreen('studio')}
+          onOpenMap={() => {
+            setTitleSettingsOpen(false);
+            setScreen('map');
+          }}
+          onOpenStudio={() => {
+            setTitleSettingsOpen(false);
+            setScreen('studio');
+          }}
+          onOpenSettings={() => setTitleSettingsOpen(true)}
           muted={muted}
           onToggleMute={handleToggleMute}
+          fps={perfTelemetry.fps}
+        />
+      )}
+
+      {screen === 'title' && titleSettingsOpen && (
+        <TitleSettingsModal
+          graphicsQuality={graphicsQuality}
+          onChangeGraphicsQuality={handleChangeGraphicsQuality}
+          volume={volume}
+          audioMix={audioMix}
+          muted={muted}
+          onChangeVolume={handleChangeVolume}
+          onChangeChannelVolume={handleChangeChannelVolume}
+          onToggleMute={handleToggleMute}
+          perfTelemetry={perfTelemetry}
+          onClose={() => setTitleSettingsOpen(false)}
         />
       )}
 
@@ -587,9 +678,17 @@ export default function App() {
         <RaceHud
           hud={hud}
           track={selectedTrack}
+          fps={perfTelemetry.fps}
+          perfTelemetry={perfTelemetry}
+          graphicsQuality={graphicsQuality}
+          volume={volume}
+          audioMix={audioMix}
           muted={muted}
           hudSettings={hudSettings}
           settingsOpen={hudSettingsOpen}
+          onChangeGraphicsQuality={handleChangeGraphicsQuality}
+          onChangeVolume={handleChangeVolume}
+          onChangeChannelVolume={handleChangeChannelVolume}
           onChangeHudSettings={setHudSettings}
           onToggleSettings={handleToggleHudSettings}
           onToggleMute={handleToggleMute}
@@ -606,11 +705,6 @@ export default function App() {
       {screen === 'paused' && (
         <PauseModal
           isOnline={isOnlineRace}
-          graphicsQuality={graphicsQuality}
-          onChangeGraphicsQuality={(quality) => {
-            setGraphicsQuality(quality);
-            engineRef.current?.setGraphicsQuality(quality);
-          }}
           onResume={() => {
             setScreen('playing');
             engineRef.current?.setPaused(false);

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ChassisId, VehicleConfig, WheelId, WingId } from '../shared/types';
 
 export interface CarRig {
@@ -11,12 +12,22 @@ export interface CarRig {
   fallbackFrontWheelPivots: THREE.Group[];
   wheelMeshes: THREE.Object3D[];
   fallbackWheelMeshes: THREE.Object3D[];
-  bodyMaterials: THREE.MeshPhysicalMaterial[];
+  bodyMaterials: THREE.MeshStandardMaterial[];
   accentMaterials: THREE.MeshStandardMaterial[];
   taillightMaterial: THREE.MeshStandardMaterial;
   shadowDisc: THREE.Mesh;
+  currentLod: 0 | 1 | 2;
+  currentCastShadow: boolean;
   dispose: () => void;
 }
+
+const HIT_FLASH_MATERIAL = new THREE.MeshStandardMaterial({
+  color: 0xffffff,
+  emissive: 0xffffff,
+  emissiveIntensity: 0.78,
+  roughness: 0.3,
+});
+HIT_FLASH_MATERIAL.userData.sharedCustomMat = true;
 
 function createExtrudedProfile(
   points: Array<[number, number]>,
@@ -73,7 +84,7 @@ function createLatheTireGeometry(radius: number, width: number): THREE.BufferGeo
     new THREE.Vector2(radius * 0.88, hw),
     new THREE.Vector2(innerR, hw * 0.92),
   ];
-  const geo = new THREE.LatheGeometry(pts, 24);
+  const geo = new THREE.LatheGeometry(pts, 14);
   geo.rotateZ(Math.PI * 0.5);
   geo.computeVertexNormals();
   return geo;
@@ -84,7 +95,7 @@ function buildWheelMesh(
   rimMat: THREE.MeshStandardMaterial,
   tireMat: THREE.MeshStandardMaterial,
   accentMat: THREE.MeshStandardMaterial,
-  caliperMat: THREE.MeshStandardMaterial,
+  _caliperMat: THREE.MeshStandardMaterial,
 ): THREE.Group {
   const wheel = new THREE.Group();
   const radius = 0.37;
@@ -94,59 +105,32 @@ function buildWheelMesh(
   tire.castShadow = true;
   wheel.add(tire);
 
-  const barrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius * 0.64, radius * 0.64, width * 0.86, 20),
-    rimMat,
-  );
-  barrel.rotation.z = Math.PI * 0.5;
-  wheel.add(barrel);
-
-  const rotor = new THREE.Mesh(
-    new THREE.CylinderGeometry(radius * 0.48, radius * 0.48, 0.04, 18),
-    new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9, roughness: 0.35 }),
-  );
-  rotor.rotation.z = Math.PI * 0.5;
-  wheel.add(rotor);
-
-  const caliper = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.16, 0.12), caliperMat);
-  caliper.position.set(0, 0.08, 0.13);
-  wheel.add(caliper);
-
-  const centerCap = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.065, 0.075, width + 0.03, 12),
-    accentMat,
-  );
-  centerCap.rotation.z = Math.PI * 0.5;
-  wheel.add(centerCap);
+  const rimGeos: THREE.BufferGeometry[] = [];
+  const barrel = new THREE.CylinderGeometry(radius * 0.64, radius * 0.64, width * 0.86, 12);
+  barrel.rotateZ(Math.PI * 0.5);
+  rimGeos.push(barrel.toNonIndexed());
+  barrel.dispose();
 
   if (style === 'alloy_5') {
     for (let i = 0; i < 5; i++) {
       const angle = (i / 5) * Math.PI * 2;
-      const spoke = new THREE.Mesh(
-        new THREE.BoxGeometry(width + 0.02, 0.042, radius * 0.56),
-        rimMat,
-      );
-      spoke.position.set(0, Math.cos(angle) * radius * 0.3, Math.sin(angle) * radius * 0.3);
-      spoke.rotation.x = angle;
-      wheel.add(spoke);
+      const spoke = new THREE.BoxGeometry(width + 0.02, 0.042, radius * 0.56);
+      spoke.rotateX(angle);
+      spoke.translate(0, Math.cos(angle) * radius * 0.3, Math.sin(angle) * radius * 0.3);
+      rimGeos.push(spoke.toNonIndexed());
+      spoke.dispose();
     }
-  } else if (style === 'aero_disc') {
-    const disc = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius * 0.61, radius * 0.61, width + 0.025, 20),
-      accentMat,
-    );
-    disc.rotation.z = Math.PI * 0.5;
-    wheel.add(disc);
   } else {
-    const lip = new THREE.Mesh(
-      new THREE.TorusGeometry(radius * 0.57, 0.035, 10, 20),
-      accentMat,
-    );
-    lip.rotation.y = Math.PI * 0.5;
-    const lipL = lip.clone();
-    lip.position.x = width * 0.44;
-    lipL.position.x = -width * 0.44;
-    wheel.add(lip, lipL);
+    const cap = new THREE.CylinderGeometry(radius * 0.58, radius * 0.58, width + 0.02, 12);
+    cap.rotateZ(Math.PI * 0.5);
+    rimGeos.push(cap.toNonIndexed());
+    cap.dispose();
+  }
+
+  const mergedRim = mergeGeometries(rimGeos, false);
+  for (const g of rimGeos) g.dispose();
+  if (mergedRim) {
+    wheel.add(new THREE.Mesh(mergedRim, style === 'aero_disc' ? accentMat : rimMat));
   }
 
   return wheel;
@@ -258,6 +242,7 @@ export function clearGlbFromCarRig(rig: CarRig): void {
   rig.glbHolder.visible = false;
   rig.fallbackGroup.visible = true;
   rig.attachedModelKey = null;
+  rig.currentLod = 0;
   rig.frontWheelPivots = rig.fallbackFrontWheelPivots;
   rig.wheelMeshes = rig.fallbackWheelMeshes;
 }
@@ -297,8 +282,95 @@ export function attachGlbToCarRig(rig: CarRig, proto: THREE.Group, modelKey: str
   rig.glbHolder.visible = true;
   rig.fallbackGroup.visible = false;
   rig.attachedModelKey = modelKey;
+  rig.currentLod = 0;
   rig.frontWheelPivots = [];
   rig.wheelMeshes = glbWheels;
+}
+
+export function applyCarRigLod(rig: CarRig, lod: 0 | 1 | 2, castShadow: boolean): void {
+  if (rig.currentLod === lod && rig.currentCastShadow === castShadow) return;
+  rig.currentLod = lod;
+  rig.currentCastShadow = castShadow;
+
+  const hasGlb = Boolean(rig.attachedModelKey);
+  if (!hasGlb || lod === 2) {
+    rig.glbHolder.visible = false;
+    rig.fallbackGroup.visible = true;
+    rig.fallbackGroup.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        (obj as THREE.Mesh).castShadow = castShadow && lod === 0;
+      }
+    });
+    return;
+  }
+
+  rig.fallbackGroup.visible = false;
+  rig.glbHolder.visible = true;
+  rig.glbHolder.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh) {
+      const m = obj as THREE.Mesh;
+      if (m.userData.strippedFloor) {
+        m.visible = false;
+        m.castShadow = false;
+        return;
+      }
+      const radius = typeof m.userData.boundRadius === 'number' ? m.userData.boundRadius : 1.0;
+      if (lod === 1) {
+        // Hide small bolts/calipers/mirrors at medium distance to cut opponent draw calls
+        m.visible = radius >= 0.28;
+        m.castShadow = false;
+      } else {
+        m.visible = true;
+        m.castShadow = castShadow && radius >= 0.22;
+      }
+    }
+  });
+}
+
+function mergeFallbackStaticGroup(group: THREE.Group): void {
+  group.updateMatrixWorld(true);
+  const byMat = new Map<THREE.Material, THREE.Mesh[]>();
+  group.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh) {
+      const m = obj as THREE.Mesh;
+      if (Array.isArray(m.material) || !m.material) return;
+      let list = byMat.get(m.material);
+      if (!list) {
+        list = [];
+        byMat.set(m.material, list);
+      }
+      list.push(m);
+    }
+  });
+
+  for (const [mat, meshes] of byMat.entries()) {
+    if (meshes.length <= 1) continue;
+    const prepared: THREE.BufferGeometry[] = [];
+    for (const m of meshes) {
+      const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      g.applyMatrix4(m.matrixWorld);
+      if (!g.attributes.normal) g.computeVertexNormals();
+      for (const attrName of Object.keys(g.attributes)) {
+        if (attrName !== 'position' && attrName !== 'normal') {
+          g.deleteAttribute(attrName);
+        }
+      }
+      g.clearGroups();
+      prepared.push(g);
+    }
+    const merged = mergeGeometries(prepared, false);
+    for (const g of prepared) g.dispose();
+    if (!merged) continue;
+    merged.computeBoundingSphere();
+    const batchMesh = new THREE.Mesh(merged, mat);
+    batchMesh.castShadow = meshes.some((m) => m.castShadow);
+    batchMesh.receiveShadow = meshes.some((m) => m.receiveShadow);
+    group.add(batchMesh);
+    for (const m of meshes) {
+      m.removeFromParent();
+      m.geometry.dispose();
+    }
+  }
 }
 
 export function buildCarRig(config: VehicleConfig): CarRig {
@@ -317,12 +389,10 @@ export function buildCarRig(config: VehicleConfig): CarRig {
   }
 
   const isMetallic = config.finish === 'metallic';
-  const bodyMat = new THREE.MeshPhysicalMaterial({
+  const bodyMat = new THREE.MeshStandardMaterial({
     color: new THREE.Color(config.primaryColor),
-    metalness: isMetallic ? 0.72 : 0.14,
-    roughness: isMetallic ? 0.22 : 0.65,
-    clearcoat: isMetallic ? 1.0 : 0.12,
-    clearcoatRoughness: 0.1,
+    metalness: isMetallic ? 0.68 : 0.14,
+    roughness: isMetallic ? 0.26 : 0.65,
   });
 
   const accentMat = new THREE.MeshStandardMaterial({
@@ -337,12 +407,10 @@ export function buildCarRig(config: VehicleConfig): CarRig {
     roughness: 0.68,
   });
 
-  const glassMat = new THREE.MeshPhysicalMaterial({
+  const glassMat = new THREE.MeshStandardMaterial({
     color: 0x0d1522,
-    metalness: 0.25,
-    roughness: 0.06,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.04,
+    metalness: 0.35,
+    roughness: 0.12,
   });
 
   const headlightMat = new THREE.MeshStandardMaterial({
@@ -568,6 +636,7 @@ export function buildCarRig(config: VehicleConfig): CarRig {
 
   const wingGroup = buildWingMesh(config.wing, config.chassis, carbonMat, accentMat);
   if (wingGroup) fallbackGroup.add(wingGroup);
+  mergeFallbackStaticGroup(fallbackGroup);
 
   const fallbackFrontWheelPivots: THREE.Group[] = [];
   const fallbackWheelMeshes: THREE.Object3D[] = [];
@@ -625,6 +694,8 @@ export function buildCarRig(config: VehicleConfig): CarRig {
     accentMaterials: [accentMat],
     taillightMaterial: taillightMat,
     shadowDisc,
+    currentLod: 0,
+    currentCastShadow: true,
     dispose,
   };
 }
@@ -636,45 +707,25 @@ export function setCarHitFlash(rig: CarRig, active: boolean): void {
   }
 
   if (rig.glbHolder.visible) {
-    if (active && !rig.glbHolder.userData.clonedFlashMats) {
-      rig.glbHolder.userData.clonedFlashMats = true;
-      const cloneMat = (mat: THREE.Material) => {
-        const cloned = mat.clone();
-        cloned.userData = { ...cloned.userData, sharedCustomMat: false };
-        return cloned;
-      };
-      rig.glbHolder.traverse((obj) => {
-        if ((obj as THREE.Mesh).isMesh) {
-          const mesh = obj as THREE.Mesh;
-          if (mesh.material) {
-            mesh.material = Array.isArray(mesh.material)
-              ? mesh.material.map(cloneMat)
-              : cloneMat(mesh.material);
-          }
-        }
-      });
-    }
-    if (!rig.glbHolder.userData.clonedFlashMats) return;
-
     rig.glbHolder.traverse((obj) => {
       if ((obj as THREE.Mesh).isMesh) {
         const mesh = obj as THREE.Mesh;
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        for (const m of mats) {
-          if (!m || !('emissive' in m)) continue;
-          const std = m as THREE.MeshStandardMaterial;
-          if (active) {
-            if (!std.userData._flashSaved) {
-              std.userData._flashSaved = true;
-              std.userData._origEmissive = std.emissive.getHex();
-              std.userData._origEmissiveInt = std.emissiveIntensity;
+        if (active) {
+          if (!mesh.userData._flashActive && mesh.material) {
+            mesh.userData._origMat = mesh.material;
+            mesh.userData._flashActive = true;
+            if (Array.isArray(mesh.material)) {
+              if (!mesh.userData._flashMatArr || mesh.userData._flashMatArr.length !== mesh.material.length) {
+                mesh.userData._flashMatArr = mesh.material.map(() => HIT_FLASH_MATERIAL);
+              }
+              mesh.material = mesh.userData._flashMatArr;
+            } else {
+              mesh.material = HIT_FLASH_MATERIAL;
             }
-            std.emissive.setHex(0xffffff);
-            std.emissiveIntensity = 0.55;
-          } else if (std.userData._flashSaved) {
-            std.emissive.setHex(std.userData._origEmissive ?? 0x000000);
-            std.emissiveIntensity = std.userData._origEmissiveInt ?? 0;
           }
+        } else if (mesh.userData._flashActive && mesh.userData._origMat) {
+          mesh.material = mesh.userData._origMat;
+          mesh.userData._flashActive = false;
         }
       }
     });

@@ -356,24 +356,24 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
       data-testid="track-studio-modal"
       className="fixed inset-0 z-30 bg-[#11151c]/95 flex items-stretch lg:items-center justify-center p-0 sm:p-3 lg:p-8"
     >
-      <div className="w-full max-w-5xl rounded-none sm:rounded-xl bg-[#161c26] border-0 sm:border border-white/15 p-3 sm:p-5 md:p-6 flex flex-col lg:flex-row gap-4 lg:gap-6 h-full lg:h-auto lg:max-h-[92vh] overflow-y-auto overscroll-contain">
+      <div className="w-full max-w-5xl rounded-none sm:rounded-xl glass-panel border-0 sm:border border-white/15 p-3 sm:p-5 md:p-6 flex flex-col lg:flex-row gap-4 lg:gap-6 h-full lg:h-auto lg:max-h-[92vh] overflow-y-auto overscroll-contain">
         {/* Left: Freehand Drawing Canvas */}
         <div className="flex-1 flex flex-col gap-2.5 sm:gap-3 shrink-0">
           <div className="flex items-center justify-between gap-2 sm:gap-3">
-            <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg bg-[#10141c] border border-white/15 text-xs font-semibold text-white hover:bg-[#232b38] cursor-pointer shrink-0"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg glass-btn-subtle text-xs font-semibold text-white transition-all cursor-pointer active:scale-95 shrink-0"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span>Back</span>
               </button>
               <div className="min-w-0">
-                <h2 className="font-display text-base sm:text-xl font-bold text-white leading-tight">
+                <h2 className="font-display text-base sm:text-xl font-bold text-white leading-tight truncate">
                   Freehand Track Studio
                 </h2>
-                <p className="text-[11px] sm:text-xs text-slate-400 leading-snug">
+                <p className="text-[11px] sm:text-xs text-slate-400 leading-snug truncate">
                   Sketch a closed loop — scroll for circuit settings
                 </p>
               </div>
@@ -397,7 +397,7 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -406,7 +406,7 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
                   setToolMode('draw');
                   setErrorMsg(null);
                 }}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#10141c] border border-white/15 text-xs font-medium text-slate-200 hover:bg-[#232b38] cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg glass-btn-subtle text-[11px] sm:text-xs font-medium text-slate-200 hover:text-white transition-all cursor-pointer active:scale-95"
               >
                 <Eraser className="w-3.5 h-3.5" />
                 <span>Clear</span>
@@ -415,7 +415,7 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
                 type="button"
                 onClick={handleAutoSketchLoop}
                 data-testid="btn-auto-sketch"
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#10141c] border border-white/15 text-xs font-medium text-slate-200 hover:bg-[#232b38] cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg glass-btn-subtle text-[11px] sm:text-xs font-medium text-slate-200 hover:text-white transition-all cursor-pointer active:scale-95"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 <span>Auto-Sketch Loop</span>
@@ -425,22 +425,22 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setToolMode((m) => (m === 'boost' ? 'draw' : 'boost'))}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium cursor-pointer ${
+                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-medium transition-all cursor-pointer active:scale-95 ${
                       toolMode === 'boost'
-                        ? 'bg-[#0ea5e9]/20 border-[#0ea5e9] text-white'
-                        : 'bg-[#10141c] border-white/15 text-slate-200 hover:bg-[#232b38]'
+                        ? 'glass-btn-orange-soft text-white'
+                        : 'glass-btn-subtle text-slate-200 hover:text-white'
                     }`}
                   >
-                    <Zap className="w-3.5 h-3.5 text-[#0ea5e9]" />
+                    <Zap className="w-3.5 h-3.5 text-[#ffb238]" />
                     <span>{toolMode === 'boost' ? 'Click Track: Boost' : `Boosts (${boostPads.length})`}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setToolMode((m) => (m === 'obstacle' ? 'draw' : 'obstacle'))}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium cursor-pointer ${
+                    className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg text-[11px] sm:text-xs font-medium transition-all cursor-pointer active:scale-95 ${
                       toolMode === 'obstacle'
-                        ? 'bg-[#ff4d2e]/20 border-[#ff4d2e] text-white'
-                        : 'bg-[#10141c] border-white/15 text-slate-200 hover:bg-[#232b38]'
+                        ? 'glass-btn-orange-soft text-white'
+                        : 'glass-btn-subtle text-slate-200 hover:text-white'
                     }`}
                   >
                     <ShieldAlert className="w-3.5 h-3.5 text-[#ff4d2e]" />
@@ -454,7 +454,7 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
                           b === 'barricade' ? 'tire_stack' : b === 'tire_stack' ? 'cone_cluster' : 'barricade',
                         )
                       }
-                      className="px-2.5 py-2 rounded-lg bg-[#10141c] border border-amber-400/50 text-xs font-semibold text-amber-300 hover:bg-[#232b38] cursor-pointer"
+                      className="px-2.5 py-1.5 sm:py-2 rounded-lg glass-btn-subtle border-amber-400/50 text-[11px] sm:text-xs font-semibold text-amber-300 transition-all cursor-pointer active:scale-95"
                     >
                       Type: {obstacleBrush === 'barricade' ? 'Barricade' : obstacleBrush === 'tire_stack' ? 'Tire Stack' : 'Cones'}
                     </button>
@@ -479,8 +479,8 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
         </div>
 
         {/* Right (Below on smaller devices): Track Properties & Publish */}
-        <div className="w-full lg:w-72 shrink-0 flex flex-col justify-between gap-4 border-t lg:border-t-0 lg:border-l border-white/10 pt-4 pb-2 lg:py-0 lg:pl-6">
-          <div className="space-y-4">
+        <div className="w-full lg:w-72 shrink-0 flex flex-col justify-between gap-4 border-t lg:border-t-0 lg:border-l border-white/10 pt-3.5 pb-2 lg:py-0 lg:pl-6">
+          <div className="space-y-3.5 sm:space-y-4">
             <div>
               <label htmlFor="track-name-input" className="block text-xs font-medium text-slate-300 mb-1.5">
                 Circuit Name
@@ -491,26 +491,26 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
                 maxLength={36}
                 value={trackName}
                 onChange={(e) => setTrackName(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-[#10141c] border border-white/15 text-sm text-white focus:outline-none focus:border-[#ff4d2e]"
+                className="w-full px-3 py-2 rounded-lg bg-[#10141c]/90 border border-white/15 text-sm text-white focus:outline-none focus:border-[#ff4d2e]"
               />
             </div>
 
             <div>
               <span className="block text-xs font-medium text-slate-300 mb-2">World Biome</span>
-              <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-2 lg:grid-cols-1 gap-1.5 sm:gap-2">
                 {THEMES.map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => setTheme(t.id)}
-                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg border text-xs font-semibold cursor-pointer ${
+                    className={`flex items-center justify-between gap-2 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-all cursor-pointer active:scale-[0.98] ${
                       theme === t.id
-                        ? 'bg-[#ff4d2e]/20 border-[#ff4d2e] text-white'
-                        : 'bg-[#10141c] border-white/10 text-slate-300 hover:border-white/25'
+                        ? 'glass-btn-orange-soft text-white'
+                        : 'glass-btn-subtle text-slate-300 hover:text-white'
                     }`}
                   >
-                    <span>{t.label}</span>
-                    <span className="w-4 h-4 rounded-sm border border-white/30" style={{ backgroundColor: t.bg }} />
+                    <span className="truncate">{t.label}</span>
+                    <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-sm border border-white/30 shrink-0" style={{ backgroundColor: t.bg }} />
                   </button>
                 ))}
               </div>
@@ -544,7 +544,7 @@ export const TrackStudioModal: React.FC<TrackStudioModalProps> = ({
             type="button"
             disabled={publishing || !validation.valid}
             onClick={handlePublish}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-[#ff4d2e] hover:bg-[#e83f22] disabled:opacity-45 disabled:cursor-not-allowed text-white font-display font-bold text-sm tracking-wide cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 rounded-lg glass-btn-primary disabled:opacity-45 disabled:cursor-not-allowed text-[#141414] font-display font-bold text-sm tracking-wide transition-all cursor-pointer active:scale-[0.98]"
           >
             <Upload className="w-4 h-4" />
             <span>{publishing ? 'Publishing...' : 'Publish to Community'}</span>

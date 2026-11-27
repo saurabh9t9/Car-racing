@@ -1,3 +1,12 @@
+import {
+  clampVolume,
+  loadAudioMix,
+  saveAudioMix,
+  volumeToChannelGain,
+  volumeToMasterGain,
+  type AudioChannelId,
+  type AudioMixSettings,
+} from '../shared/audioSettings';
 import type { WeatherPreset } from '../shared/types';
 import {
   computeNextAmbientDelayMs,
@@ -9,6 +18,10 @@ import {
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private engineBus: GainNode | null = null;
+  private sfxBus: GainNode | null = null;
+  private ambientBus: GainNode | null = null;
+
   private engineOsc1: OscillatorNode | null = null;
   private engineOsc2: OscillatorNode | null = null;
   private engineGain: GainNode | null = null;
@@ -25,7 +38,8 @@ class SoundEngine {
   private ambientTriggerCount = 0;
   private gestureUnlockBound = false;
 
-  private muted = false;
+  private mix: AudioMixSettings = loadAudioMix();
+  private muted = this.mix.master <= 0;
 
   private canStartContextWithoutWarning(): boolean {
     if (typeof window === 'undefined') return false;
@@ -41,7 +55,7 @@ class SoundEngine {
       this.gestureUnlockBound = false;
       window.removeEventListener('pointerdown', unlock, true);
       window.removeEventListener('keydown', unlock, true);
-      if (this.ambientActive && !this.muted) {
+      if (this.ambientActive && !this.isAmbientMuted()) {
         this.applyWeatherAmbience(false);
       }
     };
@@ -56,8 +70,20 @@ class SoundEngine {
       if (!AudioCtx) return null;
       this.ctx = new AudioCtx();
       this.master = this.ctx.createGain();
-      this.master.gain.value = this.muted ? 0 : 0.42;
+      this.master.gain.value = volumeToMasterGain(this.mix.master, this.muted);
       this.master.connect(this.ctx.destination);
+
+      this.engineBus = this.ctx.createGain();
+      this.engineBus.gain.value = volumeToChannelGain(this.mix.engine, false);
+      this.engineBus.connect(this.master);
+
+      this.sfxBus = this.ctx.createGain();
+      this.sfxBus.gain.value = volumeToChannelGain(this.mix.sfx, false);
+      this.sfxBus.connect(this.master);
+
+      this.ambientBus = this.ctx.createGain();
+      this.ambientBus.gain.value = volumeToChannelGain(this.mix.ambient, false);
+      this.ambientBus.connect(this.master);
     }
     if (this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
@@ -87,10 +113,14 @@ class SoundEngine {
     return buffer;
   }
 
+  private isAmbientMuted(): boolean {
+    return this.muted || this.mix.ambient <= 0;
+  }
+
   private syncBodyDataset(lastCue?: 'thunder' | 'crickets'): void {
     if (typeof document === 'undefined' || !document.body) return;
     const profile = resolveAmbientAudioProfile(this.ambientWeather);
-    document.body.dataset.ambient = this.ambientActive && !this.muted ? profile.mode : 'off';
+    document.body.dataset.ambient = this.ambientActive && !this.isAmbientMuted() ? profile.mode : 'off';
     if (lastCue) {
       document.body.dataset.ambientCue = `${lastCue}:${this.ambientTriggerCount}`;
     }
@@ -98,10 +128,18 @@ class SoundEngine {
 
   public setMuted(muted: boolean): void {
     this.muted = muted;
-    if (this.master && this.ctx) {
-      this.master.gain.setTargetAtTime(muted ? 0 : 0.42, this.ctx.currentTime, 0.03);
+    if (!muted && this.mix.master <= 0) {
+      this.mix = { ...this.mix, master: 0.7 };
+      saveAudioMix(this.mix);
     }
-    if (muted) {
+    if (this.master && this.ctx) {
+      this.master.gain.setTargetAtTime(
+        volumeToMasterGain(this.mix.master, this.muted),
+        this.ctx.currentTime,
+        0.03,
+      );
+    }
+    if (this.isAmbientMuted()) {
       this.clearAmbientEventTimer();
       if (this.ambientBedGain && this.ctx) {
         this.ambientBedGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.04);
@@ -119,9 +157,80 @@ class SoundEngine {
     return this.muted;
   }
 
+  public getVolume(): number {
+    return this.mix.master;
+  }
+
+  public getMix(): AudioMixSettings {
+    return { ...this.mix };
+  }
+
+  public setVolume(nextVolume: number): void {
+    this.setChannelVolume('master', nextVolume);
+  }
+
+  public setChannelVolume(channel: AudioChannelId, nextVolume: number): void {
+    const clamped = clampVolume(nextVolume);
+    const wasAmbientMuted = this.isAmbientMuted();
+
+    if (channel === 'master') {
+      this.mix = { ...this.mix, master: clamped };
+      this.muted = clamped <= 0;
+      if (this.master && this.ctx) {
+        this.master.gain.setTargetAtTime(
+          volumeToMasterGain(this.mix.master, this.muted),
+          this.ctx.currentTime,
+          0.02,
+        );
+      }
+    } else if (channel === 'engine') {
+      this.mix = { ...this.mix, engine: clamped };
+      if (this.engineBus && this.ctx) {
+        this.engineBus.gain.setTargetAtTime(
+          volumeToChannelGain(clamped, false),
+          this.ctx.currentTime,
+          0.02,
+        );
+      }
+    } else if (channel === 'sfx') {
+      this.mix = { ...this.mix, sfx: clamped };
+      if (this.sfxBus && this.ctx) {
+        this.sfxBus.gain.setTargetAtTime(
+          volumeToChannelGain(clamped, false),
+          this.ctx.currentTime,
+          0.02,
+        );
+      }
+    } else if (channel === 'ambient') {
+      this.mix = { ...this.mix, ambient: clamped };
+      if (this.ambientBus && this.ctx) {
+        this.ambientBus.gain.setTargetAtTime(
+          volumeToChannelGain(clamped, false),
+          this.ctx.currentTime,
+          0.02,
+        );
+      }
+    }
+
+    saveAudioMix(this.mix);
+
+    if (this.isAmbientMuted()) {
+      this.clearAmbientEventTimer();
+      if (this.ambientBedGain && this.ctx) {
+        this.ambientBedGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.04);
+      }
+      this.syncBodyDataset();
+    } else if (wasAmbientMuted && this.ambientActive) {
+      this.applyWeatherAmbience(false);
+      this.syncBodyDataset();
+    } else {
+      this.syncBodyDataset();
+    }
+  }
+
   public startEngine(): void {
     const ctx = this.ensureContext();
-    if (!ctx || !this.master || this.engineOsc1) return;
+    if (!ctx || !this.engineBus || this.engineOsc1) return;
 
     this.engineFilter = ctx.createBiquadFilter();
     this.engineFilter.type = 'lowpass';
@@ -141,7 +250,7 @@ class SoundEngine {
     this.engineOsc1.connect(this.engineFilter);
     this.engineOsc2.connect(this.engineFilter);
     this.engineFilter.connect(this.engineGain);
-    this.engineGain.connect(this.master);
+    this.engineGain.connect(this.engineBus);
 
     this.engineOsc1.start();
     this.engineOsc2.start();
@@ -150,7 +259,7 @@ class SoundEngine {
   public updateEngine(speedRatio: number, isBoosting: boolean, active: boolean): void {
     if (!this.ctx || !this.engineGain || !this.engineOsc1 || !this.engineOsc2 || !this.engineFilter) return;
     const now = this.ctx.currentTime;
-    if (!active || this.muted) {
+    if (!active || this.muted || this.mix.engine <= 0) {
       this.engineGain.gain.setTargetAtTime(0, now, 0.06);
       return;
     }
@@ -169,9 +278,9 @@ class SoundEngine {
   }
 
   public playDash(): void {
-    if (this.muted) return;
+    if (this.muted || this.mix.sfx <= 0) return;
     const ctx = this.ensureContext();
-    if (!ctx || !this.master) return;
+    if (!ctx || !this.sfxBus) return;
 
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
@@ -185,15 +294,15 @@ class SoundEngine {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.21);
 
     osc.connect(gain);
-    gain.connect(this.master);
+    gain.connect(this.sfxBus);
     osc.start(now);
     osc.stop(now + 0.22);
   }
 
   public playRamImpact(intensity = 1): void {
-    if (this.muted) return;
+    if (this.muted || this.mix.sfx <= 0) return;
     const ctx = this.ensureContext();
-    if (!ctx || !this.master) return;
+    if (!ctx || !this.sfxBus) return;
 
     const now = ctx.currentTime;
     const vol = Math.min(0.55, 0.28 * intensity);
@@ -207,7 +316,7 @@ class SoundEngine {
     subGain.gain.setValueAtTime(vol, now);
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
     sub.connect(subGain);
-    subGain.connect(this.master);
+    subGain.connect(this.sfxBus);
     sub.start(now);
     sub.stop(now + 0.25);
 
@@ -219,15 +328,15 @@ class SoundEngine {
     clangGain.gain.setValueAtTime(vol * 0.45, now);
     clangGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
     clang.connect(clangGain);
-    clangGain.connect(this.master);
+    clangGain.connect(this.sfxBus);
     clang.start(now);
     clang.stop(now + 0.16);
   }
 
   public playBoost(): void {
-    if (this.muted) return;
+    if (this.muted || this.mix.sfx <= 0) return;
     const ctx = this.ensureContext();
-    if (!ctx || !this.master) return;
+    if (!ctx || !this.sfxBus) return;
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -237,15 +346,15 @@ class SoundEngine {
     gain.gain.setValueAtTime(0.22, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
     osc.connect(gain);
-    gain.connect(this.master);
+    gain.connect(this.sfxBus);
     osc.start(now);
     osc.stop(now + 0.29);
   }
 
   public playCountdown(isGo: boolean): void {
-    if (this.muted) return;
+    if (this.muted || this.mix.sfx <= 0) return;
     const ctx = this.ensureContext();
-    if (!ctx || !this.master) return;
+    if (!ctx || !this.sfxBus) return;
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -254,15 +363,15 @@ class SoundEngine {
     gain.gain.setValueAtTime(0.24, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + (isGo ? 0.35 : 0.18));
     osc.connect(gain);
-    gain.connect(this.master);
+    gain.connect(this.sfxBus);
     osc.start(now);
     osc.stop(now + (isGo ? 0.36 : 0.19));
   }
 
   public playLap(finished: boolean): void {
-    if (this.muted) return;
+    if (this.muted || this.mix.sfx <= 0) return;
     const ctx = this.ensureContext();
-    if (!ctx || !this.master) return;
+    if (!ctx || !this.sfxBus) return;
     const notes = finished ? [523.25, 659.25, 783.99, 1046.5] : [523.25, 783.99];
     notes.forEach((freq, idx) => {
       const start = ctx.currentTime + idx * 0.08;
@@ -273,7 +382,7 @@ class SoundEngine {
       gain.gain.setValueAtTime(0.2, start);
       gain.gain.exponentialRampToValueAtTime(0.001, start + 0.24);
       osc.connect(gain);
-      gain.connect(this.master!);
+      gain.connect(this.sfxBus!);
       osc.start(start);
       osc.stop(start + 0.25);
     });
@@ -287,7 +396,7 @@ class SoundEngine {
   }
 
   private ensureAmbientBed(ctx: AudioContext): void {
-    if (!this.master || this.ambientBedSource) return;
+    if (!this.ambientBus || this.ambientBedSource) return;
 
     this.ambientBedFilter = ctx.createBiquadFilter();
     this.ambientBedGain = ctx.createGain();
@@ -299,14 +408,14 @@ class SoundEngine {
 
     src.connect(this.ambientBedFilter);
     this.ambientBedFilter.connect(this.ambientBedGain);
-    this.ambientBedGain.connect(this.master);
+    this.ambientBedGain.connect(this.ambientBus);
     src.start();
     this.ambientBedSource = src;
   }
 
   private scheduleNextAmbientEvent(immediateCue: boolean): void {
     this.clearAmbientEventTimer();
-    if (!this.ambientActive || this.muted || typeof window === 'undefined') return;
+    if (!this.ambientActive || this.isAmbientMuted() || typeof window === 'undefined') return;
 
     const profile = resolveAmbientAudioProfile(this.ambientWeather);
     if (profile.eventKind === 'none') return;
@@ -314,7 +423,7 @@ class SoundEngine {
     const delayMs = immediateCue ? 180 : computeNextAmbientDelayMs(profile);
     this.ambientEventTimer = window.setTimeout(() => {
       this.ambientEventTimer = null;
-      if (!this.ambientActive || this.muted) return;
+      if (!this.ambientActive || this.isAmbientMuted()) return;
       if (profile.eventKind === 'thunder') {
         this.playThunder();
       } else if (profile.eventKind === 'crickets') {
@@ -326,7 +435,7 @@ class SoundEngine {
 
   private applyWeatherAmbience(triggerCue: boolean): void {
     const profile = resolveAmbientAudioProfile(this.ambientWeather);
-    if (!this.ambientActive || this.muted) {
+    if (!this.ambientActive || this.isAmbientMuted()) {
       this.clearAmbientEventTimer();
       if (this.ambientBedGain && this.ctx) {
         this.ambientBedGain.gain.setTargetAtTime(0, this.ctx.currentTime, 0.08);
@@ -340,7 +449,7 @@ class SoundEngine {
     }
 
     const ctx = this.ensureContext();
-    if (!ctx || !this.master) return;
+    if (!ctx || !this.ambientBus) return;
     this.ensureAmbientBed(ctx);
 
     if (this.ambientBedFilter && this.ambientBedGain) {
@@ -380,9 +489,9 @@ class SoundEngine {
   }
 
   public playThunder(): void {
-    if (this.muted || !this.canStartContextWithoutWarning()) return;
+    if (this.isAmbientMuted() || !this.canStartContextWithoutWarning()) return;
     const ctx = this.ensureContext();
-    if (!ctx || !this.master) return;
+    if (!ctx || !this.ambientBus) return;
 
     this.ambientTriggerCount += 1;
     this.syncBodyDataset('thunder');
@@ -409,7 +518,7 @@ class SoundEngine {
 
     src.connect(filter);
     filter.connect(gain);
-    gain.connect(this.master);
+    gain.connect(this.ambientBus);
     src.start(now);
     src.stop(now + duration + 0.05);
 
@@ -423,15 +532,15 @@ class SoundEngine {
     subGain.gain.linearRampToValueAtTime(0.18, now + 0.12);
     subGain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
     sub.connect(subGain);
-    subGain.connect(this.master);
+    subGain.connect(this.ambientBus);
     sub.start(now);
     sub.stop(now + 1.65);
   }
 
   public playCricketChirp(): void {
-    if (this.muted || !this.canStartContextWithoutWarning()) return;
+    if (this.isAmbientMuted() || !this.canStartContextWithoutWarning()) return;
     const ctx = this.ensureContext();
-    if (!ctx || !this.master) return;
+    if (!ctx || !this.ambientBus) return;
 
     this.ambientTriggerCount += 1;
     this.syncBodyDataset('crickets');
@@ -459,7 +568,7 @@ class SoundEngine {
 
       osc.connect(filter);
       filter.connect(gain);
-      gain.connect(this.master);
+      gain.connect(this.ambientBus);
       osc.start(start);
       osc.stop(start + 0.042);
     }
@@ -477,10 +586,10 @@ class SoundEngine {
     const profile = resolveAmbientAudioProfile(this.ambientWeather);
     return {
       weather: this.ambientWeather,
-      mode: this.ambientActive && !this.muted ? profile.mode : 'off',
+      mode: this.ambientActive && !this.isAmbientMuted() ? profile.mode : 'off',
       eventKind: profile.eventKind,
       active: this.ambientActive,
-      muted: this.muted,
+      muted: this.isAmbientMuted(),
       hasContext: Boolean(this.ctx),
       triggerCount: this.ambientTriggerCount,
     };

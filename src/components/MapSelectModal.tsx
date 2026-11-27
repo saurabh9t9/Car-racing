@@ -223,72 +223,74 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
         }}
       >
         {/* Top Header */}
-        <div className="flex items-center justify-between gap-4 px-4 sm:px-6 py-3 sm:py-4 [@media(max-height:540px)]:py-2 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center justify-between gap-2.5 sm:gap-4 px-3.5 sm:px-6 py-2.5 sm:py-4 [@media(max-height:540px)]:py-2 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 [@media(max-height:540px)]:py-1 rounded-lg bg-[#171923]/90 hover:bg-[#ff4d2e]/20 border border-orange-500/30 hover:border-orange-400 text-xs sm:text-sm font-medium text-slate-100 shadow-[0_0_10px_rgba(255,77,46,0.12)] hover:shadow-[0_0_18px_rgba(255,77,46,0.55)] transition-all duration-300 cursor-pointer shrink-0 whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2 [@media(max-height:540px)]:py-1 rounded-lg glass-btn-dark text-xs sm:text-sm font-medium text-slate-100 transition-all duration-300 cursor-pointer active:scale-95 shrink-0 whitespace-nowrap"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span>Back</span>
             </button>
 
             <div className="min-w-0">
-              <div className="font-display text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.14em] text-[#ff4d2e] leading-none">
+              <div className="font-display text-[9.5px] sm:text-[11px] font-bold uppercase tracking-[0.14em] text-[#ff4d2e] leading-none">
                 Turbo Drifter
               </div>
 
               <h2
                 id="select-map-title"
-                className="mt-0.5 font-display text-lg sm:text-2xl [@media(max-height:540px)]:text-base font-bold text-white leading-none truncate"
+                className="mt-0.5 font-display text-base sm:text-2xl [@media(max-height:540px)]:text-base font-bold text-white leading-none truncate"
               >
                 Select Map
               </h2>
             </div>
           </div>
 
-          {/* Top-right progress dashes */}
-          <div
-            className="flex items-center gap-1.5 shrink-0"
-            aria-label="Circuit progress"
-          >
-            {Array.from({ length: indicatorCount }, (_, idx) => {
-              const mappedIdx =
-                tracks.length <= indicatorCount
-                  ? idx
-                  : Math.round(
-                      (idx / Math.max(1, indicatorCount - 1)) *
-                        (tracks.length - 1),
-                    );
+          {/* Top-right progress indicator: compact counter on narrow phones, dashes on wider viewports */}
+          <div className="flex items-center gap-1.5 shrink-0" aria-label="Circuit progress">
+            <span className="min-[460px]:hidden px-2 py-0.5 rounded-full glass-btn-subtle font-mono-num text-[11px] font-semibold text-slate-100">
+              {activeIndex + 1}/{tracks.length}
+            </span>
+            <div className="hidden min-[460px]:flex items-center gap-1.5">
+              {Array.from({ length: indicatorCount }, (_, idx) => {
+                const mappedIdx =
+                  tracks.length <= indicatorCount
+                    ? idx
+                    : Math.round(
+                        (idx / Math.max(1, indicatorCount - 1)) *
+                          (tracks.length - 1),
+                      );
 
-              const isCurrent =
-                tracks.length <= indicatorCount
-                  ? idx === activeIndex
-                  : Math.round(
-                      (activeIndex / Math.max(1, tracks.length - 1)) *
-                        (indicatorCount - 1),
-                    ) === idx;
+                const isCurrent =
+                  tracks.length <= indicatorCount
+                    ? idx === activeIndex
+                    : Math.round(
+                        (activeIndex / Math.max(1, tracks.length - 1)) *
+                          (indicatorCount - 1),
+                      ) === idx;
 
-              return (
-                <button
-                  key={idx}
-                  type="button"
-                  aria-label={`Select circuit ${mappedIdx + 1}`}
-                  onClick={() => selectByIndex(mappedIdx)}
-                  className={`h-1.5 w-7 rounded-full transition-all duration-300 cursor-pointer ${
-                    isCurrent
-                      ? 'bg-[#ff4d2e] shadow-[0_0_12px_rgba(255,77,46,0.9)]'
-                      : 'bg-white/20 hover:bg-orange-400/70'
-                  }`}
-                />
-              );
-            })}
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    aria-label={`Select circuit ${mappedIdx + 1}`}
+                    onClick={() => selectByIndex(mappedIdx)}
+                    className={`h-1.5 w-5 sm:w-7 rounded-full transition-all duration-300 cursor-pointer ${
+                      isCurrent
+                        ? 'bg-[#ff4d2e] shadow-[0_0_12px_rgba(255,77,46,0.9)]'
+                        : 'bg-white/20 hover:bg-orange-400/70'
+                    }`}
+                  />
+                );
+              })}
+            </div>
           </div>
         </div>
 
         {/* Main Carousel Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 sm:px-6 pt-3 sm:pt-5 pb-3 sm:pb-4 [@media(max-height:540px)]:pt-2 [@media(max-height:540px)]:pb-2 space-y-3 sm:space-y-4 [@media(max-height:540px)]:space-y-2">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3.5 sm:px-6 pt-2.5 sm:pt-5 pb-2.5 sm:pb-4 [@media(max-height:540px)]:pt-2 [@media(max-height:540px)]:pb-2 space-y-2.5 sm:space-y-4 [@media(max-height:540px)]:space-y-2">
           <p className="text-xs sm:text-sm [@media(max-height:540px)]:hidden text-slate-200">
             Swipe through the maps and choose your active circuit.
           </p>
@@ -300,7 +302,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            className="flex gap-3.5 sm:gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar pb-1 cursor-grab active:cursor-grabbing"
+            className="flex gap-3 sm:gap-4 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar pb-1 cursor-grab active:cursor-grabbing"
           >
             {cardEntries.map(({ track, metrics, palette }, idx) => {
               const isSelected = track.id === activeTrack?.id;
@@ -322,7 +324,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                     onSelectTrack(track.id);
                     scrollToIndex(idx, 'smooth');
                   }}
-                  className={`group text-left w-[276px] sm:w-[356px] [@media(max-height:540px)]:w-[264px] shrink-0 snap-start rounded-xl overflow-hidden bg-[#0e131d] border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff4d2e] ${
+                  className={`group text-left w-[272px] min-[400px]:w-[296px] sm:w-[356px] [@media(max-height:540px)]:w-[248px] shrink-0 snap-start rounded-xl overflow-hidden bg-[#0e131d]/90 border transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff4d2e] ${
                     isSelected
                       ? 'border-[#ff4d2e] shadow-[0_0_0_1px_rgba(255,77,46,0.45),0_0_20px_rgba(255,77,46,0.16)]'
                       : 'border-white/12 hover:border-orange-400/60'
@@ -330,7 +332,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                 >
                   {/* Top-Down Circuit Illustration */}
                   <div
-                    className="relative h-[138px] sm:h-[176px] [@media(max-height:540px)]:h-[104px] w-full overflow-hidden border-b border-white/10"
+                    className="relative h-[126px] sm:h-[176px] [@media(max-height:540px)]:h-[96px] w-full overflow-hidden border-b border-white/10"
                     style={{ backgroundColor: palette.bg }}
                   >
                     <svg
@@ -369,7 +371,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                     </svg>
 
                     {/* BUILT-IN / CUSTOM badge */}
-                    <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/65 border border-white/15 font-display text-[10px] font-bold uppercase tracking-wider text-white">
+                    <span className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-black/65 border border-white/15 font-display text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider text-white">
                       <span
                         className="w-2 h-2 rounded-full shrink-0"
                         style={{
@@ -385,9 +387,9 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                   </div>
 
                   {/* Card Details */}
-                  <div className="p-4 space-y-2.5">
+                  <div className="p-3 sm:p-4 space-y-2 sm:space-y-2.5">
                     <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-display text-lg font-bold text-white truncate">
+                      <h3 className="font-display text-base sm:text-lg font-bold text-white truncate">
                         {track.name}
                       </h3>
 
@@ -400,12 +402,12 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                       />
                     </div>
 
-                    <p className="text-xs text-slate-400 truncate">
+                    <p className="text-[11px] sm:text-xs text-slate-400 truncate">
                       {palette.label} · By {track.author}
                     </p>
 
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-1 text-xs">
-                      <div className="flex items-baseline gap-1.5 min-w-0">
+                    <div className="grid grid-cols-2 gap-x-2 sm:gap-x-4 gap-y-1 sm:gap-y-1.5 pt-0.5 sm:pt-1 text-[10.5px] sm:text-xs">
+                      <div className="flex items-baseline gap-1 sm:gap-1.5 min-w-0">
                         <span className="text-slate-400 shrink-0">
                           Area
                         </span>
@@ -415,7 +417,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                         </span>
                       </div>
 
-                      <div className="flex items-baseline gap-1.5 min-w-0">
+                      <div className="flex items-baseline gap-1 sm:gap-1.5 min-w-0">
                         <span className="text-slate-400 shrink-0">
                           Lap
                         </span>
@@ -425,7 +427,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                         </span>
                       </div>
 
-                      <div className="flex items-baseline gap-1.5 min-w-0">
+                      <div className="flex items-baseline gap-1 sm:gap-1.5 min-w-0">
                         <span className="text-slate-400 shrink-0">
                           Road
                         </span>
@@ -435,9 +437,10 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                         </span>
                       </div>
 
-                      <div className="flex items-baseline gap-1.5 min-w-0">
+                      <div className="flex items-baseline gap-1 sm:gap-1.5 min-w-0">
                         <span className="text-slate-400 shrink-0">
-                          Boosts / hazards
+                          <span className="sm:hidden">Boost / Haz</span>
+                          <span className="hidden sm:inline">Boosts / hazards</span>
                         </span>
 
                         <span className="font-mono-num font-bold text-slate-100 whitespace-nowrap">
@@ -452,12 +455,12 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
           </div>
 
           {/* Previous / Active Label / Next Controls */}
-          <div className="flex items-center justify-between gap-3 pt-1">
+          <div className="flex items-center justify-between gap-2.5 sm:gap-3 pt-0.5 sm:pt-1">
             <button
               type="button"
               aria-label="Previous map"
               onClick={() => selectByIndex(activeIndex - 1)}
-              className="w-10 h-10 rounded-lg bg-[#161b26]/90 hover:bg-[#ff4d2e]/20 border border-white/15 hover:border-orange-400 flex items-center justify-center text-slate-200 hover:text-white hover:shadow-[0_0_18px_rgba(255,77,46,0.55)] transition-all duration-300 cursor-pointer shrink-0"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg glass-btn-dark flex items-center justify-center text-slate-200 hover:text-white transition-all duration-300 cursor-pointer active:scale-95 shrink-0"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -476,7 +479,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
               type="button"
               aria-label="Next map"
               onClick={() => selectByIndex(activeIndex + 1)}
-              className="w-10 h-10 rounded-lg bg-[#161b26]/90 hover:bg-[#ff4d2e]/20 border border-white/15 hover:border-orange-400 flex items-center justify-center text-slate-200 hover:text-white hover:shadow-[0_0_18px_rgba(255,77,46,0.55)] transition-all duration-300 cursor-pointer shrink-0"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg glass-btn-dark flex items-center justify-center text-slate-200 hover:text-white transition-all duration-300 cursor-pointer active:scale-95 shrink-0"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -484,10 +487,10 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
         </div>
 
         {/* Bottom Footer Bar */}
-        <div className="flex flex-col min-[520px]:flex-row min-[520px]:items-center justify-between gap-2.5 sm:gap-3 px-4 sm:px-6 py-3 sm:py-4 [@media(max-height:540px)]:py-2 border-t border-white/10 bg-[#0d111a]/75 backdrop-blur-md shrink-0">
+        <div className="flex flex-col min-[520px]:flex-row min-[520px]:items-center justify-between gap-2 sm:gap-3 px-3.5 sm:px-6 py-2.5 sm:py-4 [@media(max-height:540px)]:py-2 border-t border-white/10 bg-[#0d111a]/75 backdrop-blur-md shrink-0">
 
           {/* Weather Selector */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between min-[520px]:justify-start gap-2">
             <span
               id="map-weather-label"
               className="text-xs font-medium text-slate-300 shrink-0"
@@ -498,7 +501,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
             <div
               role="group"
               aria-labelledby="map-weather-label"
-              className="inline-flex items-center gap-1 p-1 rounded-lg bg-[#141925]/90 border border-white/10"
+              className="inline-flex items-center gap-1 p-1 rounded-lg bg-[#141925]/80 border border-white/10"
             >
               {WEATHER_PRESETS.map((preset) => {
                 const active = weather === preset.id;
@@ -516,10 +519,10 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
                     type="button"
                     aria-pressed={active}
                     onClick={() => onSelectWeather(preset.id)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 [@media(max-height:540px)]:py-1 rounded-md text-xs font-semibold transition-all duration-300 cursor-pointer whitespace-nowrap ${
+                    className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 [@media(max-height:540px)]:py-1 rounded-md text-[11px] sm:text-xs font-semibold transition-all duration-300 cursor-pointer whitespace-nowrap active:scale-95 ${
                       active
-                        ? 'bg-[#ff4d2e]/20 text-white border border-[#ff4d2e]/70 shadow-[0_0_12px_rgba(255,77,46,0.35)]'
-                        : 'text-slate-300 hover:text-white border border-transparent hover:border-orange-400/40 hover:bg-orange-500/10 hover:shadow-[0_0_12px_rgba(255,77,46,0.25)]'
+                        ? 'glass-btn-orange-soft text-white'
+                        : 'glass-btn-subtle border-transparent text-slate-300 hover:text-white'
                     }`}
                   >
                     <Icon
@@ -543,7 +546,7 @@ export const MapSelectModal: React.FC<MapSelectModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="w-full min-[520px]:w-auto px-5 sm:px-6 py-2.5 sm:py-3 [@media(max-height:540px)]:py-2 rounded-lg bg-[#ff4d2e] hover:bg-[#ff603d] text-white font-display font-bold text-xs sm:text-sm tracking-wide shadow-[0_0_12px_rgba(255,77,46,0.45),0_0_30px_rgba(255,77,46,0.25)] hover:shadow-[0_0_18px_rgba(255,77,46,0.75),0_0_42px_rgba(255,77,46,0.4)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer whitespace-nowrap"
+            className="w-full min-[520px]:w-auto px-5 sm:px-6 py-2 sm:py-3 [@media(max-height:540px)]:py-1.5 rounded-lg glass-btn-primary text-[#141414] font-display font-bold text-xs sm:text-sm tracking-wide transition-all duration-300 cursor-pointer active:scale-[0.98] whitespace-nowrap"
           >
             Return to Main Menu
           </button>

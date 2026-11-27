@@ -2,8 +2,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { resolveEnvMaterialFlags } from '../shared/envMaterial';
 import type { TrackTheme } from '../shared/types';
-import { recordGlbDownload, recordGlbLoaded } from './performanceStats';
+import {
+  isBackgroundStreamingThrottled,
+  recordGlbDownload,
+  recordGlbLoaded,
+} from './performanceStats';
 
 export type EnvModelId =
   | 'race_drag_start_and_finish_line'
@@ -98,15 +104,15 @@ const ENV_MODEL_SPECS: EnvModelSpec[] = [
   { id: 'env_dry_tree', file: '/models/env/trees/dry_tree_vurvur_house_5.glb', targetHeight: 8, variant: 'default',},
   { id: 'env_dry_grass', file: '/models/env/trees/dry_realistic_grass_lods_1.glb', targetHeight: 2, variant: 'default',},
 
-  // Sakura Pass assets: exact folder/file names from the supplied asset browser.
+  // Sakura Pass assets: scaled to realistic circuit proportions so groves & temples stay clear of barriers.
   { id: 'sakura_statue', file: '/models/env/sakura pass/2ff77d68adf6448a936fa1b1575133cb.glb', targetHeight: 3.2, variant: 'default' },
-  { id: 'sakura_cherry_trees', file: '/models/env/sakura pass/cherry_blossom_trees.glb', targetHeight: 12.0, variant: 'default' },
-  { id: 'sakura_chinese_architecture', file: '/models/env/sakura pass/chinese_architecture.glb', targetHeight: 11.0, variant: 'racing_prop' },
-  { id: 'sakura_fantasy_architecture', file: '/models/env/sakura pass/chinese_fantasy_03_-_revisited.glb', targetHeight: 18.0, variant: 'racing_prop' },
-  { id: 'sakura_chinese_hall', file: '/models/env/sakura pass/chinese_hall.glb', targetHeight: 15.0, variant: 'racing_prop' },
-  { id: 'sakura_japanese_temple', file: '/models/env/sakura pass/japanese_lowpoly_temple.glb', targetHeight: 18.0, variant: 'racing_prop' },
-  { id: 'sakura_lamp_pagoda', file: '/models/env/sakura pass/japanese_wooden_lamp_pagoda.glb', targetHeight: 6.5, variant: 'racing_prop' },
-  { id: 'sakura_drum', file: '/models/env/sakura pass/maybe_jp_drum.glb', targetHeight: 5.0, variant: 'racing_prop' },
+  { id: 'sakura_cherry_trees', file: '/models/env/sakura pass/cherry_blossom_trees.glb', targetHeight: 8.5, variant: 'default' },
+  { id: 'sakura_chinese_architecture', file: '/models/env/sakura pass/chinese_architecture.glb', targetHeight: 9.5, variant: 'racing_prop' },
+  { id: 'sakura_fantasy_architecture', file: '/models/env/sakura pass/chinese_fantasy_03_-_revisited.glb', targetHeight: 13.0, variant: 'racing_prop' },
+  { id: 'sakura_chinese_hall', file: '/models/env/sakura pass/chinese_hall.glb', targetHeight: 11.5, variant: 'racing_prop' },
+  { id: 'sakura_japanese_temple', file: '/models/env/sakura pass/chinese_hall.glb', targetHeight: 13.0, variant: 'racing_prop' },
+  { id: 'sakura_lamp_pagoda', file: '/models/env/sakura pass/japanese_wooden_lamp_pagoda.glb', targetHeight: 5.8, variant: 'racing_prop' },
+  { id: 'sakura_drum', file: '/models/env/sakura pass/maybe_jp_drum.glb', targetHeight: 4.0, variant: 'racing_prop' },
 ];
 
 export interface EnvMeshPart {
@@ -150,7 +156,7 @@ const THEME_ENV_MODEL_IDS: Record<TrackTheme, readonly EnvModelId[]> = {
   sunset: ['canyon_tall', 'canyon_rock', 'canyon_cliff', 'cactus_tall', 'cactus_short', 'env_dry_tree', 'env_dry_grass'],
   midnight: ['skyscraper_a', 'skyscraper_b', 'skyscraper_c', 'building_a'],
   coastal: ['pine_tall_a', 'pine_tall_b', 'rock_large', 'env_palm_tree', 'env_stylized_rocks'],
-  sakura: ['pine_tall_a', 'pine_tall_b', 'pine_round', 'rock_large', 'env_spruce_trees', 'env_stylized_rocks', 'sakura_statue', 'sakura_cherry_trees', 'sakura_chinese_architecture', 'sakura_fantasy_architecture', 'sakura_chinese_hall', 'sakura_japanese_temple', 'sakura_lamp_pagoda', 'sakura_drum'],
+  sakura: ['env_spruce_trees', 'env_stylized_rocks', 'sakura_statue', 'sakura_cherry_trees', 'sakura_chinese_architecture', 'sakura_fantasy_architecture', 'sakura_chinese_hall', 'sakura_japanese_temple', 'sakura_lamp_pagoda', 'sakura_drum'],
 };
 
 const TERRAIN_TEXTURE_BY_THEME: Record<TrackTheme, { key: keyof typeof TEX_URLS; repeatX: number; repeatY: number }> = {
@@ -229,7 +235,7 @@ function getOrStartSyncTexture(
     configureTexture(tex, repeatX, repeatY, true);
     cachedTextures.set(key, tex);
   }
-  tex.anisotropy = maxAnisotropy;
+  tex.anisotropy = Math.max(1, Math.min(4, maxAnisotropy));
   return tex;
 }
 
@@ -385,10 +391,28 @@ function upgradeMaterialForPbr(
     }
   }
 
+  const stdOrig = origMat as THREE.MeshStandardMaterial;
+  const alphaMap = stdOrig.alphaMap ?? null;
+  const flags = resolveEnvMaterialFlags({
+    name: origMat.name || '',
+    isTransparent: Boolean(origMat.transparent),
+    alphaTest: origMat.alphaTest ?? 0,
+    hasAlphaMap: Boolean(alphaMap),
+    isDoubleSided: origMat.side === THREE.DoubleSide,
+    vertexColors: Boolean(origMat.vertexColors),
+  });
+
   const std = new THREE.MeshStandardMaterial({
     name: origMat.name,
     color: map && variant !== 'night_city' ? 0xffffff : baseColor,
     map: map ?? null,
+    alphaMap,
+    alphaTest: flags.alphaTest,
+    transparent: flags.transparent,
+    depthWrite: flags.depthWrite,
+    opacity: flags.opacity,
+    side: flags.doubleSided ? THREE.DoubleSide : THREE.FrontSide,
+    vertexColors: flags.vertexColors,
     roughness,
     metalness,
     emissive: emissiveHex,
@@ -419,7 +443,7 @@ function normalizeEnvModel(
       } else if (m.material) {
         m.material = upgradeMaterialForPbr(m.material, spec.variant);
       }
-      m.castShadow = true;
+      m.castShadow = false;
       m.receiveShadow = true;
     }
   });
@@ -449,8 +473,9 @@ function normalizeEnvModel(
   const finalSize = new THREE.Vector3();
   finalBox.getSize(finalSize);
 
-  // Extract geometry + material + localMatrix relative to wrapper for InstancedMesh rendering
-  const parts: EnvMeshPart[] = [];
+  // Extract geometry + material + localMatrix relative to wrapper, then merge parts
+  // sharing the exact same material to minimize InstancedMesh draw calls.
+  const rawParts: EnvMeshPart[] = [];
   wrapper.traverse((obj) => {
     if ((obj as THREE.Mesh).isMesh) {
       const m = obj as THREE.Mesh;
@@ -460,8 +485,6 @@ function normalizeEnvModel(
       if (Array.isArray(m.material)) {
         const groups = m.geometry.groups;
         if (groups && groups.length > 0) {
-          // Keep full multi-material mesh via clone when instantiated individually;
-          // for InstancedMesh, create one part per geometry group if multi-material
           for (let gIdx = 0; gIdx < groups.length; gIdx++) {
             const grp = groups[gIdx];
             const mat = m.material[grp.materialIndex ?? 0];
@@ -470,21 +493,21 @@ function normalizeEnvModel(
             subGeo.clearGroups();
             subGeo.addGroup(grp.start, grp.count, 0);
             subGeo.setDrawRange(grp.start, grp.count);
-            parts.push({
+            rawParts.push({
               geometry: subGeo,
               material: mat,
               localMatrix: m.matrixWorld.clone(),
             });
           }
         } else if (m.material[0]) {
-          parts.push({
+          rawParts.push({
             geometry: m.geometry,
             material: m.material[0],
             localMatrix: m.matrixWorld.clone(),
           });
         }
       } else if (m.material) {
-        parts.push({
+        rawParts.push({
           geometry: m.geometry,
           material: m.material,
           localMatrix: m.matrixWorld.clone(),
@@ -493,12 +516,150 @@ function normalizeEnvModel(
     }
   });
 
+  const parts = mergeEnvPartsByMaterial(rawParts);
+
   return {
     id: spec.id,
     group: wrapper,
     parts,
     size: finalSize,
   };
+}
+
+const _identityMatrix = new THREE.Matrix4();
+
+function toFloat32Attribute(attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): THREE.BufferAttribute {
+  const count = attr.count;
+  const itemSize = attr.itemSize;
+  const out = new Float32Array(count * itemSize);
+  for (let i = 0; i < count; i++) {
+    const base = i * itemSize;
+    out[base] = attr.getX(i);
+    if (itemSize > 1) out[base + 1] = attr.getY(i);
+    if (itemSize > 2) out[base + 2] = attr.getZ(i);
+    if (itemSize > 3) out[base + 3] = attr.getW(i);
+  }
+  return new THREE.BufferAttribute(out, itemSize, false);
+}
+
+function normalizeGeometryForMerge(
+  sourceGeo: THREE.BufferGeometry,
+  localMatrix: THREE.Matrix4,
+  includeUv: boolean,
+  includeColor: boolean,
+): THREE.BufferGeometry {
+  let geo = sourceGeo.index ? sourceGeo.toNonIndexed() : sourceGeo.clone();
+  if (geo.drawRange.count !== Infinity && geo.drawRange.count > 0) {
+    const start = geo.drawRange.start;
+    const end = start + geo.drawRange.count;
+    for (const key of Object.keys(geo.attributes)) {
+      const attr = geo.attributes[key];
+      const itemSize = attr.itemSize;
+      const sliced = new Float32Array((end - start) * itemSize);
+      for (let i = start; i < end; i++) {
+        const base = (i - start) * itemSize;
+        sliced[base] = attr.getX(i);
+        if (itemSize > 1) sliced[base + 1] = attr.getY(i);
+        if (itemSize > 2) sliced[base + 2] = attr.getZ(i);
+        if (itemSize > 3) sliced[base + 3] = attr.getW(i);
+      }
+      geo.setAttribute(key, new THREE.BufferAttribute(sliced, itemSize, false));
+    }
+    geo.setDrawRange(0, Infinity);
+  }
+  geo.applyMatrix4(localMatrix);
+
+  const posCount = geo.attributes.position.count;
+  if (!geo.attributes.normal) {
+    geo.computeVertexNormals();
+  }
+  if (includeUv && !geo.attributes.uv) {
+    geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(posCount * 2), 2));
+  }
+  if (includeColor && !geo.attributes.color) {
+    const white = new Float32Array(posCount * 3);
+    white.fill(1);
+    geo.setAttribute('color', new THREE.BufferAttribute(white, 3));
+  }
+  // Keep only canonical Float32 attributes so mergeGeometries never fails on mismatched extra or quantized types
+  for (const attrName of Object.keys(geo.attributes)) {
+    if (
+      attrName !== 'position' &&
+      attrName !== 'normal' &&
+      !(includeUv && attrName === 'uv') &&
+      !(includeColor && attrName === 'color')
+    ) {
+      geo.deleteAttribute(attrName);
+      continue;
+    }
+    const attr = geo.attributes[attrName];
+    if (!(attr.array instanceof Float32Array) || attr.normalized || (attr as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute) {
+      geo.setAttribute(attrName, toFloat32Attribute(attr));
+    }
+  }
+  geo.clearGroups();
+  return geo;
+}
+
+function getEnvMaterialMergeKey(mat: THREE.Material): string {
+  const std = mat as THREE.MeshStandardMaterial;
+  const col = std.color ? std.color.getHexString() : 'ffffff';
+  const em = std.emissive ? std.emissive.getHexString() : '000000';
+  const mapId = std.map ? std.map.uuid : 'none';
+  const alphaMapId = std.alphaMap ? std.alphaMap.uuid : 'none';
+  const emMapId = std.emissiveMap ? std.emissiveMap.uuid : 'none';
+  const r = Math.round((std.roughness ?? 0.5) * 100);
+  const m = Math.round((std.metalness ?? 0) * 100);
+  const ei = Math.round((std.emissiveIntensity ?? 0) * 100);
+  const envI = Math.round((std.envMapIntensity ?? 1) * 100);
+  const op = Math.round((std.opacity ?? 1) * 100);
+  const at = Math.round((std.alphaTest ?? 0) * 100);
+  return `${mat.type}|${col}|${em}|${mapId}|${alphaMapId}|${emMapId}|${r}|${m}|${ei}|${envI}|${std.transparent ? 1 : 0}|${op}|${at}|${std.depthWrite ? 1 : 0}|${std.vertexColors ? 1 : 0}|${std.side}`;
+}
+
+function mergeEnvPartsByMaterial(rawParts: EnvMeshPart[]): EnvMeshPart[] {
+  if (rawParts.length <= 1) return rawParts;
+  const byMat = new Map<string, { material: THREE.Material; parts: EnvMeshPart[] }>();
+  for (const p of rawParts) {
+    const key = getEnvMaterialMergeKey(p.material);
+    let bucket = byMat.get(key);
+    if (!bucket) {
+      bucket = { material: p.material, parts: [] };
+      byMat.set(key, bucket);
+    }
+    bucket.parts.push(p);
+  }
+
+  const mergedParts: EnvMeshPart[] = [];
+  for (const { material, parts: groupParts } of byMat.values()) {
+    if (groupParts.length === 1) {
+      mergedParts.push(groupParts[0]);
+      continue;
+    }
+    const stdMat = material as THREE.MeshStandardMaterial;
+    const includeUv = Boolean(stdMat.map || stdMat.alphaMap || stdMat.emissiveMap);
+    const includeColor = Boolean(stdMat.vertexColors);
+    const prepared: THREE.BufferGeometry[] = [];
+    for (const p of groupParts) {
+      if (p.geometry.attributes.position?.count > 0) {
+        prepared.push(normalizeGeometryForMerge(p.geometry, p.localMatrix, includeUv, includeColor));
+      }
+    }
+    if (prepared.length === 0) continue;
+    const merged = mergeGeometries(prepared, false);
+    for (const g of prepared) g.dispose();
+    if (merged) {
+      merged.computeBoundingSphere();
+      mergedParts.push({
+        geometry: merged,
+        material,
+        localMatrix: _identityMatrix.clone(),
+      });
+    } else {
+      mergedParts.push(...groupParts);
+    }
+  }
+  return mergedParts;
 }
 
 async function loadEnvironmentModel(spec: EnvModelSpec): Promise<void> {
@@ -616,12 +777,62 @@ export function warmUpEnvTextures(renderer: THREE.WebGLRenderer): void {
         const mats = Array.isArray(m.material) ? m.material : [m.material];
         for (const mat of mats) {
           const std = mat as THREE.MeshStandardMaterial;
-          if (std.map && !std.map.userData._gpuInited) {
-            std.map.userData._gpuInited = true;
-            renderer.initTexture(std.map);
+          for (const tex of [std.map, std.alphaMap, std.emissiveMap]) {
+            if (tex && !tex.userData._gpuInited) {
+              tex.userData._gpuInited = true;
+              renderer.initTexture(tex);
+            }
           }
         }
       }
     });
+  }
+}
+
+function waitForEnvBackgroundIdle(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const win = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    };
+    window.setTimeout(() => {
+      if (typeof win.requestIdleCallback === 'function') {
+        win.requestIdleCallback(() => resolve(), { timeout: 350 });
+      } else {
+        resolve();
+      }
+    }, ms);
+  });
+}
+
+export async function preloadRemainingEnvironmentBiomesInBackground(
+  activeTheme: TrackTheme,
+  isDisposed: () => boolean,
+): Promise<void> {
+  const remaining: TrackTheme[] = (['alpine', 'sunset', 'coastal', 'sakura', 'midnight'] as const)
+    .filter((t) => t !== activeTheme);
+  for (const theme of remaining) {
+    if (isDisposed()) return;
+    const terrain = TERRAIN_TEXTURE_BY_THEME[theme];
+    try {
+      while (isBackgroundStreamingThrottled()) {
+        if (isDisposed()) return;
+        await waitForEnvBackgroundIdle(320);
+      }
+      await loadTextureCached(terrain.key, TEX_URLS[terrain.key], terrain.repeatX, terrain.repeatY);
+      const specs = getEnvironmentModelSpecs(theme);
+      for (const spec of specs) {
+        if (isDisposed()) return;
+        if (envAssetCache.has(spec.id)) continue;
+        while (isBackgroundStreamingThrottled()) {
+          if (isDisposed()) return;
+          await waitForEnvBackgroundIdle(320);
+        }
+        await loadEnvironmentModel(spec);
+        await waitForEnvBackgroundIdle(180);
+      }
+    } catch {
+      // Ignore transient preload errors for unselected biomes
+    }
+    await waitForEnvBackgroundIdle(220);
   }
 }

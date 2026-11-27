@@ -24,9 +24,12 @@ import type {
   WeatherPreset,
 } from '../shared/types';
 import {
+  computeEffectivePixelRatio,
   GRAPHICS_PROFILES,
   loadGraphicsQuality,
   saveGraphicsQuality,
+  stepAdaptiveQualityState,
+  type AdaptiveQualityState,
   type GraphicsLevel,
   type GraphicsProfile,
   type GraphicsQuality,
@@ -36,6 +39,7 @@ import { CAR_MODELS } from '../shared/carCatalog';
 import { computeGarageCameraFraming, stepGarageTurntable } from '../shared/garageCamera';
 import { soundEngine } from './audio';
 import {
+  applyCarRigLod,
   attachGlbToCarRig,
   buildCarRig,
   clearGlbFromCarRig,
@@ -48,12 +52,19 @@ import {
   preloadCarModelById,
   preloadRemainingFleetInBackground,
   preloadStartupAssets,
+  reportBackgroundFrameMs,
   warmUpModelTextures,
   setBackgroundStreamingPaused,
   type StartupLoadProgress,
 } from './customModels';
-import { getGaragePaddockTexture, preloadEnvironmentAssets, warmUpEnvTextures } from './envAssets';
+import {
+  getGaragePaddockTexture,
+  preloadEnvironmentAssets,
+  preloadRemainingEnvironmentBiomesInBackground,
+  warmUpEnvTextures,
+} from './envAssets';
 import { buildTrackScene, type BuiltTrackScene } from './trackBuilder';
+import { type PerformanceTelemetrySnapshot } from '../shared/perfTelemetry';
 import { PerformanceMonitor } from './performanceMonitor';
 
 export type EngineMode = 'title' | 'garage' | 'race';
@@ -117,14 +128,20 @@ export class RaceEngine {
   private isSoftwareGl: boolean;
   private performanceMonitor: PerformanceMonitor;
   private graphicsQuality: GraphicsQuality = loadGraphicsQuality();
-  private adaptiveLevel: GraphicsLevel = 'HIGH';
+  private initialAdaptiveLevel: GraphicsLevel = 'MEDIUM';
+  private maxAutoLevel: GraphicsLevel = 'HIGH';
+  private adaptiveState: AdaptiveQualityState = {
+    level: 'MEDIUM',
+    resolutionScale: 1.0,
+    lowFpsWindows: 0,
+    highFpsWindows: 0,
+    nextChangeAt: 0,
+  };
   private adaptiveFrameCount = 0;
   private adaptiveWindowStart = performance.now();
-  private lowFpsWindows = 0;
-  private highFpsWindows = 0;
-  private nextAdaptiveChangeAt = 0;
   private activeParticleCount = MAX_PARTICLES;
   private activeRainCount = RAIN_DROP_COUNT;
+  private contextLost = false;
 
   private mode: EngineMode = 'title';
   private paused = false;
@@ -221,6 +238,7 @@ export class RaceEngine {
     onHudUpdate: (hud: HudTelemetry) => void,
     onSendOnlineInput?: (input: RaceInput, sequence: number) => void,
     onModelLoadingChange?: (loading: boolean) => void,
+    onPerformanceUpdate?: (perf: PerformanceTelemetrySnapshot) => void,
   ) {
     this.container = container;
     this.onHudUpdate = onHudUpdate;
@@ -236,21 +254,39 @@ export class RaceEngine {
       gl.getExtension('WEBGL_lose_context')?.loseContext();
       return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(gpu);
     })();
+    document.documentElement.dataset.softwareGl = this.isSoftwareGl ? '1' : '0';
     const mobileViewport =
       window.matchMedia?.('(pointer: coarse)').matches ||
       Math.min(window.innerWidth, window.innerHeight) < 720;
-    this.adaptiveLevel = this.isSoftwareGl ? 'LOW' : mobileViewport ? 'MEDIUM' : 'HIGH';
+    this.maxAutoLevel = mobileViewport ? 'MEDIUM' : 'HIGH';
+    this.initialAdaptiveLevel = this.isSoftwareGl || mobileViewport ? 'LOW' : 'MEDIUM';
+    this.adaptiveState = {
+      level: this.initialAdaptiveLevel,
+      resolutionScale: mobileViewport ? 0.85 : 1.0,
+      lowFpsWindows: 0,
+      highFpsWindows: 0,
+      nextChangeAt: 0,
+    };
 
     this.renderer = new THREE.WebGLRenderer({
-      antialias: !this.isSoftwareGl,
+      antialias: !this.isSoftwareGl && !mobileViewport,
       powerPreference: 'high-performance',
       preserveDrawingBuffer: this.isSoftwareGl,
     });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.08;
-    this.renderer.setPixelRatio(this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = !this.isSoftwareGl;
+    const initProfile = this.getResolvedGraphicsProfile();
+    const initScale = this.graphicsQuality === 'AUTO' ? this.adaptiveState.resolutionScale : 1.0;
+    this.renderer.setPixelRatio(
+      computeEffectivePixelRatio(
+        window.devicePixelRatio || 1,
+        initProfile.pixelRatioCap,
+        initScale,
+        this.isSoftwareGl,
+      ),
+    );
+    this.renderer.shadowMap.enabled = !this.isSoftwareGl && initProfile.shadows;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.setSize(container.clientWidth || 1280, container.clientHeight || 720);
     this.renderer.domElement.style.display = 'block';
@@ -260,7 +296,7 @@ export class RaceEngine {
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.performanceMonitor = new PerformanceMonitor(container, import.meta.env.DEV);
+    this.performanceMonitor = new PerformanceMonitor(onPerformanceUpdate);
     this.camera = new THREE.PerspectiveCamera(
       65,
       (container.clientWidth || 1280) / (container.clientHeight || 720),
@@ -279,18 +315,18 @@ export class RaceEngine {
 
     this.keyLight = new THREE.DirectionalLight(0xfff3dc, 1.85);
     this.keyLight.position.set(60, 95, 45);
-    this.keyLight.castShadow = !this.isSoftwareGl;
+    this.keyLight.castShadow = !this.isSoftwareGl && initProfile.shadows;
     this.keyLight.shadow.mapSize.width = 1024;
     this.keyLight.shadow.mapSize.height = 1024;
     this.keyLight.shadow.bias = -0.0005;
     this.keyLight.shadow.normalBias = 0.02;
-    const d = 75;
+    const d = 42;
     this.keyLight.shadow.camera.left = -d;
     this.keyLight.shadow.camera.right = d;
     this.keyLight.shadow.camera.top = d;
     this.keyLight.shadow.camera.bottom = -d;
     this.keyLight.shadow.camera.near = 10;
-    this.keyLight.shadow.camera.far = 260;
+    this.keyLight.shadow.camera.far = 220;
     this.scene.add(this.keyLight);
     this.scene.add(this.keyLight.target);
 
@@ -353,6 +389,8 @@ export class RaceEngine {
     window.addEventListener('blur', this.handleBlur);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
     this.renderer.domElement.addEventListener('pointerdown', this.handlePointerDown);
+    this.renderer.domElement.addEventListener('webglcontextlost', this.handleContextLost);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.handleContextRestored);
     window.addEventListener('pointermove', this.handlePointerMove);
     window.addEventListener('pointerup', this.handlePointerUp);
     window.addEventListener('pointercancel', this.handlePointerUp);
@@ -386,13 +424,16 @@ export class RaceEngine {
       this.loadTrack(this.currentTrackDef, this.currentWeather);
       this.enterTitleMode(playerCar);
     }
-    // Silently warm-cache the rest of the 15-car Garage fleet in the background
+    // Silently warm-cache the remaining 15-car Garage fleet and other biome environments in background
     void preloadRemainingFleetInBackground(
       loadedIds,
       BOT_FLEET_IDS,
       this.isSoftwareGl,
       () => this.disposed,
-      (proto) => warmUpModelTextures(proto, this.renderer),
+    );
+    void preloadRemainingEnvironmentBiomesInBackground(
+      this.currentTrackDef.theme,
+      () => this.disposed,
     );
   }
 
@@ -697,7 +738,21 @@ for (let y = 4; y < 320; y += step) {
     this.builtTrack = buildTrackScene(this.compiledTrack, maxAniso, this.currentWeather);
     this.scene.add(this.builtTrack.group);
 
-    this.restoreTrackLighting();
+    if (this.mode === 'garage') {
+      this.builtTrack.group.visible = false;
+    } else {
+      this.restoreTrackLighting();
+    }
+    this.updateTrackLodImmediate();
+  }
+
+  private updateTrackLodImmediate(): void {
+    if (!this.builtTrack) return;
+    const focus = this.localRacers.find((racer) => racer.id === this.localId) ?? this.localRacers[0];
+    const refPoint = focus ?? sampleTrackAt(this.compiledTrack, 0);
+    const profile = this.getResolvedGraphicsProfile();
+    this.builtTrack.updateLod(refPoint.x, refPoint.z, profile.sceneryDistance);
+    this.lastSceneryLodUpdateAt = performance.now();
   }
 
   private restoreTrackLighting(): void {
@@ -716,7 +771,7 @@ for (let y = 4; y < 320; y += step) {
     const [sx, sy, sz] = pal.sunDirection;
     this.keyLight.position.set(sx * 120, Math.max(25, sy * 140), sz * 120);
     this.keyLight.target.position.set(0, 0, 0);
-    const d = 75;
+    const d = 42;
     this.keyLight.shadow.camera.left = -d;
     this.keyLight.shadow.camera.right = d;
     this.keyLight.shadow.camera.top = d;
@@ -836,6 +891,7 @@ for (let y = 4; y < 320; y += step) {
       this.camera.updateProjectionMatrix();
     }
     this.syncVisualCarRigs(0.016);
+    this.updateTrackLodImmediate();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -875,41 +931,53 @@ for (let y = 4; y < 320; y += step) {
   public setGraphicsQuality(quality: GraphicsQuality): void {
     this.graphicsQuality = quality;
     saveGraphicsQuality(quality);
-    this.lowFpsWindows = 0;
-    this.highFpsWindows = 0;
+    this.adaptiveState = {
+      level: this.initialAdaptiveLevel,
+      resolutionScale: 1.0,
+      lowFpsWindows: 0,
+      highFpsWindows: 0,
+      nextChangeAt: 0,
+    };
+    this.adaptiveFrameCount = 0;
+    this.adaptiveWindowStart = performance.now();
     this.applyGraphicsProfile(this.mode !== 'garage' && this.currentTrackDef.theme === 'sakura');
-    if (this.builtTrack) {
-      const focus = this.localRacers.find((racer) => racer.id === this.localId) ?? this.localRacers[0];
-      const profile = this.getResolvedGraphicsProfile();
-      if (focus) this.builtTrack.updateLod(focus.x, focus.z, profile.sceneryDistance);
-    }
+    this.updateTrackLodImmediate();
   }
 
   private getResolvedGraphicsProfile(): GraphicsProfile {
-    const requestedLevel = this.graphicsQuality === 'AUTO' ? this.adaptiveLevel : this.graphicsQuality;
+    const requestedLevel = this.graphicsQuality === 'AUTO' ? this.adaptiveState.level : this.graphicsQuality;
     const level = this.isSoftwareGl ? 'LOW' : requestedLevel;
     return GRAPHICS_PROFILES[level];
   }
 
   private applyGraphicsProfile(isSakura: boolean): void {
     const profile = this.getResolvedGraphicsProfile();
+    const resScale = this.graphicsQuality === 'AUTO' ? this.adaptiveState.resolutionScale : 1.0;
     this.renderer.setPixelRatio(
-      this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, profile.pixelRatioCap),
+      computeEffectivePixelRatio(
+        window.devicePixelRatio || 1,
+        profile.pixelRatioCap,
+        resScale,
+        this.isSoftwareGl,
+      ),
     );
-    this.keyLight.castShadow = !this.isSoftwareGl && profile.shadows && !isSakura;
-    const shadowSize = Math.max(512, profile.shadowMapSize);
+    const castShadows = !this.isSoftwareGl && profile.shadows && !isSakura;
+    this.keyLight.castShadow = castShadows;
+    this.renderer.shadowMap.enabled = castShadows;
+    const shadowSize = Math.max(512, profile.shadowMapSize || 512);
     if (this.keyLight.shadow.mapSize.width !== shadowSize) {
       this.keyLight.shadow.map?.dispose();
       this.keyLight.shadow.map = null;
       this.keyLight.shadow.mapSize.set(shadowSize, shadowSize);
     }
+    this.builtTrack?.setLowDetailMode(profile.sceneryDistance <= 100);
     const nextParticleCount = profile.particleCount;
     for (let i = nextParticleCount; i < this.activeParticleCount; i++) {
       const particle = this.particles[i];
       if (particle) particle.active = false;
     }
     this.activeParticleCount = nextParticleCount;
-    this.activeRainCount = profile.particleCount === 90 ? 120 : profile.particleCount === 130 ? 190 : RAIN_DROP_COUNT;
+    this.activeRainCount = profile.particleCount <= 70 ? 110 : profile.particleCount <= 110 ? 180 : RAIN_DROP_COUNT;
     this.particleMesh.count = this.activeParticleCount;
     this.rainMesh.count = this.activeRainCount;
   }
@@ -918,29 +986,35 @@ for (let y = 4; y < 320; y += step) {
     if (this.graphicsQuality !== 'AUTO' || this.isSoftwareGl) return;
     this.adaptiveFrameCount++;
     const elapsedMs = now - this.adaptiveWindowStart;
-    if (elapsedMs < 2500) return;
+    if (elapsedMs < 1000) return;
 
     const fps = (this.adaptiveFrameCount * 1000) / elapsedMs;
     this.adaptiveFrameCount = 0;
     this.adaptiveWindowStart = now;
-    this.lowFpsWindows = fps < 48 ? this.lowFpsWindows + 1 : 0;
-    this.highFpsWindows = fps > 58 ? this.highFpsWindows + 1 : 0;
-    if (now < this.nextAdaptiveChangeAt) return;
 
-    const levels: GraphicsLevel[] = ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'];
-    const currentIndex = levels.indexOf(this.adaptiveLevel);
-    if (this.lowFpsWindows >= 2 && currentIndex > 0) {
-      this.adaptiveLevel = levels[currentIndex - 1];
-      this.lowFpsWindows = 0;
-      this.highFpsWindows = 0;
-      this.nextAdaptiveChangeAt = now + 5000;
+    // Fast-track directly to LOW + 0.75x scale on severe lag (< 42 FPS / >= 24ms) to stop 70+ ms stalls immediately
+    if (
+      fps < 42 &&
+      now >= this.adaptiveState.nextChangeAt &&
+      (this.adaptiveState.level !== 'LOW' || this.adaptiveState.resolutionScale > 0.75)
+    ) {
+      this.adaptiveState = {
+        level: 'LOW',
+        resolutionScale: 0.75,
+        lowFpsWindows: 0,
+        highFpsWindows: 0,
+        nextChangeAt: now + 2200,
+      };
       this.applyGraphicsProfile(this.mode !== 'garage' && this.currentTrackDef.theme === 'sakura');
-    } else if (this.highFpsWindows >= 4 && currentIndex < levels.length - 1) {
-      this.adaptiveLevel = levels[currentIndex + 1];
-      this.lowFpsWindows = 0;
-      this.highFpsWindows = 0;
-      this.nextAdaptiveChangeAt = now + 8000;
+      this.updateTrackLodImmediate();
+      return;
+    }
+
+    const res = stepAdaptiveQualityState(this.adaptiveState, fps, now, this.maxAutoLevel);
+    this.adaptiveState = res.state;
+    if (res.changed) {
       this.applyGraphicsProfile(this.mode !== 'garage' && this.currentTrackDef.theme === 'sakura');
+      this.updateTrackLodImmediate();
     }
   }
 
@@ -1299,6 +1373,7 @@ for (let y = 4; y < 320; y += step) {
     this.trauma = 0;
     this.recentRamBanner = null;
     this.snapCameraBehindLocal();
+    this.updateTrackLodImmediate();
     this.renderer.render(this.scene, this.camera);
     soundEngine.startEngine();
   }
@@ -1344,6 +1419,7 @@ for (let y = 4; y < 320; y += step) {
     this.raceStatus = snapshot.status === 'racing' ? 'racing' : snapshot.status === 'finished' ? 'finished' : 'countdown';
     this.elapsedMs = snapshot.elapsedMs;
     this.snapCameraBehindLocal();
+    this.updateTrackLodImmediate();
     this.renderer.render(this.scene, this.camera);
     soundEngine.startEngine();
   }
@@ -1432,7 +1508,7 @@ for (let y = 4; y < 320; y += step) {
     }
 
     const now = performance.now();
-    if (now - this.lastHudEmitAt >= 65 || this.raceStatus !== prevStatus) {
+    if (now - this.lastHudEmitAt >= 85 || this.raceStatus !== prevStatus) {
       this.lastHudEmitAt = now;
       this.emitHud(snapshot.countdownSec);
     }
@@ -1584,11 +1660,28 @@ for (let y = 4; y < 320; y += step) {
     this.garagePointerId = null;
   };
 
+  private handleContextLost = (e: Event) => {
+    e.preventDefault();
+    this.contextLost = true;
+    cancelAnimationFrame(this.frameId);
+    clearTimeout(this.frameId);
+  };
+
+  private handleContextRestored = () => {
+    this.contextLost = false;
+    this.lastTime = performance.now();
+    this.applyGraphicsProfile(this.mode !== 'garage' && this.currentTrackDef.theme === 'sakura');
+    if (!this.disposed) {
+      this.tick();
+    }
+  };
+
   private handleResize(): void {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.applyGraphicsProfile(this.mode !== 'garage' && this.currentTrackDef.theme === 'sakura');
     this.renderer.setSize(w, h);
   }
 
@@ -1673,9 +1766,12 @@ for (let y = 4; y < 320; y += step) {
   }
 
   private updateParticles(dt: number): void {
+    let anyMatrixUpdated = false;
+    let anyColorUpdated = false;
     for (let i = 0; i < this.activeParticleCount; i++) {
       const p = this.particles[i];
       if (!p.active) continue;
+      anyMatrixUpdated = true;
       p.life -= dt;
       if (p.life <= 0) {
         p.active = false;
@@ -1697,28 +1793,44 @@ for (let y = 4; y < 320; y += step) {
       _dummy.updateMatrix();
       this.particleMesh.setMatrixAt(i, _dummy.matrix);
       this.particleMesh.setColorAt(i, p.color);
+      anyColorUpdated = true;
     }
-    this.particleMesh.instanceMatrix.needsUpdate = true;
-    if (this.particleMesh.instanceColor) this.particleMesh.instanceColor.needsUpdate = true;
+    if (anyMatrixUpdated) this.particleMesh.instanceMatrix.needsUpdate = true;
+    if (anyColorUpdated && this.particleMesh.instanceColor) {
+      this.particleMesh.instanceColor.needsUpdate = true;
+    }
   }
 
   private syncVisualCarRigs(dt: number): void {
     const focusRacer =
       this.localRacers.find((racer) => racer.id === this.localId) ?? this.localRacers[0];
-    const opponentDistance = this.getResolvedGraphicsProfile().opponentDistance;
-    const maxOpponentDistanceSq = opponentDistance * opponentDistance;
+    const profile = this.getResolvedGraphicsProfile();
+    const maxOpponentDistanceSq = profile.opponentDistance * profile.opponentDistance;
+    const isSakura = this.currentTrackDef.theme === 'sakura';
+    const shadowsEnabled = !this.isSoftwareGl && profile.shadows && !isSakura;
 
     for (const racer of this.localRacers) {
       const rig = this.carRigs.get(racer.id);
       if (!rig) continue;
 
-      if (this.mode === 'race' && focusRacer && racer.id !== focusRacer.id) {
-        const dx = racer.x - focusRacer.x;
-        const dz = racer.z - focusRacer.z;
-        rig.root.visible = dx * dx + dz * dz <= maxOpponentDistanceSq;
-      } else {
-        rig.root.visible = true;
+      const isLocalPlayer = this.mode === 'race' && focusRacer ? racer.id === focusRacer.id : false;
+      const refX = this.mode === 'race' && focusRacer ? focusRacer.x : this.camera.position.x;
+      const refZ = this.mode === 'race' && focusRacer ? focusRacer.z : this.camera.position.z;
+      const dx = racer.x - refX;
+      const dz = racer.z - refZ;
+      const distSq = dx * dx + dz * dz;
+
+      if (this.mode === 'race' && focusRacer && !isLocalPlayer && distSq > maxOpponentDistanceSq) {
+        rig.root.visible = false;
+        continue;
       }
+      rig.root.visible = true;
+
+      const compactLod = this.mode === 'title' || profile.sceneryDistance <= 130;
+      const lod0Sq = compactLod ? 15 * 15 : 22 * 22;
+      const lod1Sq = compactLod ? 48 * 48 : 65 * 65;
+      const lod: 0 | 1 | 2 = isLocalPlayer || distSq < lod0Sq ? 0 : distSq < lod1Sq ? 1 : 2;
+      applyCarRigLod(rig, lod, shadowsEnabled && lod === 0);
 
       const correction =
         this.isOnline && racer.id === this.localId ? this.onlineVisualCorrection : null;
@@ -1730,13 +1842,15 @@ for (let y = 4; y < 320; y += step) {
       const turnTilt = racer.steerAngle * Math.min(1, Math.abs(racer.speed) / 35) * 0.08;
       rig.bodyGroup.rotation.z += (dashTilt + turnTilt - rig.bodyGroup.rotation.z) * Math.min(1, 14 * dt);
 
-      // Front wheel steering & tire rotation
-      for (const pivot of rig.frontWheelPivots) {
-        pivot.rotation.y = -racer.steerAngle * 0.45;
-      }
-      const spinDelta = (racer.speed / 0.37) * dt;
-      for (const wheel of rig.wheelMeshes) {
-        wheel.rotation.x += spinDelta;
+      // Front wheel steering & tire rotation (skip on distant LOD2 silhouettes)
+      if (lod < 2) {
+        for (const pivot of rig.frontWheelPivots) {
+          pivot.rotation.y = -racer.steerAngle * 0.45;
+        }
+        const spinDelta = (racer.speed / 0.37) * dt;
+        for (const wheel of rig.wheelMeshes) {
+          wheel.rotation.x += spinDelta;
+        }
       }
 
       // Hit flash decay
@@ -1757,7 +1871,7 @@ for (let y = 4; y < 320; y += step) {
   }
 
   private tick = () => {
-    if (this.disposed) return;
+    if (this.disposed || this.contextLost) return;
 
     const frameStart = performance.now();
     const now = frameStart;
@@ -1835,8 +1949,10 @@ for (let y = 4; y < 320; y += step) {
     }
 
     this.renderer.render(this.scene, this.camera);
+    const frameMs = rawDt * 1000;
+    reportBackgroundFrameMs(frameMs);
     this.performanceMonitor.recordFrame(
-      rawDt * 1000,
+      frameMs,
       performance.now() - frameStart,
       this.renderer,
       this.scene,
@@ -2008,7 +2124,7 @@ for (let y = 4; y < 320; y += step) {
       );
     }
 
-    if (!this.isOnline && now - this.lastHudEmitAt >= 65) {
+    if (!this.isOnline && now - this.lastHudEmitAt >= 85) {
       this.lastHudEmitAt = now;
       this.emitHud(Math.ceil(Math.max(0, this.countdownMs) / 1000));
     }
@@ -2046,7 +2162,7 @@ for (let y = 4; y < 320; y += step) {
   private afterDraw(cb: () => void): void {
     const gl = this.renderer.getContext() as WebGL2RenderingContext;
     if (!gl || !gl.fenceSync) {
-      this.frameId = window.setTimeout(cb, 20);
+      this.frameId = window.setTimeout(cb, 0);
       return;
     }
     const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -2058,13 +2174,13 @@ for (let y = 4; y < 320; y += step) {
       }
       const state = sync ? gl.getSyncParameter(sync, gl.SYNC_STATUS) : gl.SIGNALED;
       if (state === gl.UNSIGNALED) {
-        this.frameId = window.setTimeout(poll, 5);
+        this.frameId = window.setTimeout(poll, 2);
       } else {
         if (sync) gl.deleteSync(sync);
-        this.frameId = window.setTimeout(cb, 20);
+        cb();
       }
     };
-    this.frameId = window.setTimeout(poll, 5);
+    this.frameId = window.setTimeout(poll, 0);
   }
 
   private updateRainParticles(dt: number): void {
@@ -2099,6 +2215,8 @@ for (let y = 4; y < 320; y += step) {
     window.removeEventListener('blur', this.handleBlur);
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     this.renderer.domElement.removeEventListener('pointerdown', this.handlePointerDown);
+    this.renderer.domElement.removeEventListener('webglcontextlost', this.handleContextLost);
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.handleContextRestored);
     window.removeEventListener('pointermove', this.handlePointerMove);
     window.removeEventListener('pointerup', this.handlePointerUp);
     window.removeEventListener('pointercancel', this.handlePointerUp);

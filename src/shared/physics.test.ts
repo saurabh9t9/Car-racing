@@ -610,6 +610,258 @@ test('stepGarageTurntable smoothly damps toward target and coasts with decaying 
   assert.ok(Math.abs(s.angularVel) < 0.2, 'Angular velocity should decay cleanly');
 });
 
+test('adaptive graphics scaler guards 60+ FPS via fast downgrade, resolution scaling, and hysteresis upgrade', async () => {
+  const {
+    computeEffectivePixelRatio,
+    GRAPHICS_PROFILES,
+    RESOLUTION_SCALE_STEPS,
+    stepAdaptiveQualityState,
+  } = await import('./graphicsQuality');
+
+  // Verify 60+ FPS oriented baseline caps
+  assert.ok(GRAPHICS_PROFILES.LOW.shadows === false);
+  assert.ok(GRAPHICS_PROFILES.MEDIUM.shadows === false);
+  assert.ok(GRAPHICS_PROFILES.HIGH.shadowMapSize <= 512);
+  assert.ok(GRAPHICS_PROFILES.ULTRA.shadowMapSize <= 1024);
+
+  let state: import('./graphicsQuality').AdaptiveQualityState = {
+    level: 'HIGH',
+    resolutionScale: 1.0,
+    lowFpsWindows: 0,
+    highFpsWindows: 0,
+    nextChangeAt: 0,
+  };
+
+  // Single dip below 58 FPS immediately steps HIGH -> MEDIUM
+  let res = stepAdaptiveQualityState(state, 54, 1000, 'HIGH');
+  assert.equal(res.changed, true);
+  assert.equal(res.state.level, 'MEDIUM');
+  state = res.state;
+
+  // Cooldown prevents thrashing immediately after downgrade
+  res = stepAdaptiveQualityState(state, 50, 1500, 'HIGH');
+  assert.equal(res.changed, false);
+  state = res.state;
+
+  // After cooldown, sustained < 58 FPS steps MEDIUM -> LOW
+  res = stepAdaptiveQualityState(state, 50, 4000, 'HIGH');
+  assert.equal(res.changed, true);
+  assert.equal(res.state.level, 'LOW');
+  state = res.state;
+
+  // Already at LOW: steps dynamic resolutionScale down through 0.85 -> 0.75
+  res = stepAdaptiveQualityState(state, 52, 7000, 'HIGH');
+  assert.equal(res.changed, true);
+  assert.equal(res.state.level, 'LOW');
+  assert.equal(res.state.resolutionScale, RESOLUTION_SCALE_STEPS[1]);
+  state = res.state;
+
+  res = stepAdaptiveQualityState(state, 49, 10000, 'HIGH');
+  assert.equal(res.changed, true);
+  assert.equal(res.state.resolutionScale, RESOLUTION_SCALE_STEPS[0]);
+  state = res.state;
+
+  // Requires 4 consecutive 61+ FPS windows to recover one resolution step
+  let now = 13000;
+  for (let i = 0; i < 3; i++) {
+    res = stepAdaptiveQualityState(state, 62, now, 'HIGH');
+    assert.equal(res.changed, false);
+    state = res.state;
+    now += 1000;
+  }
+  res = stepAdaptiveQualityState(state, 62, now, 'HIGH');
+  assert.equal(res.changed, true);
+  assert.equal(res.state.resolutionScale, RESOLUTION_SCALE_STEPS[1]);
+
+  // Pixel ratio helper clamps software GL to 1 and scales DPR cleanly
+  assert.equal(computeEffectivePixelRatio(2, 1.5, 0.75, true), 1);
+  assert.equal(computeEffectivePixelRatio(2, 1.25, 1.0, false), 1.25);
+  assert.equal(computeEffectivePixelRatio(2, 1.0, 0.75, false), 0.75);
+});
+
+test('audio volume helpers clamp smoothly and perf detail rows omit FPS', async () => {
+  const { clampVolume, MAX_MASTER_GAIN, volumeToMasterGain } = await import('./audioSettings');
+  const { formatPerfDetailRows, INITIAL_PERF_TELEMETRY } = await import('./perfTelemetry');
+
+  assert.equal(clampVolume(NaN), 1);
+  assert.equal(clampVolume(-0.4), 0);
+  assert.equal(clampVolume(1.5), 1);
+  assert.equal(clampVolume(0.456), 0.46);
+
+  assert.equal(volumeToMasterGain(0.5, true), 0);
+  assert.equal(volumeToMasterGain(0, false), 0);
+  assert.ok(Math.abs(volumeToMasterGain(1, false) - MAX_MASTER_GAIN) < 1e-6);
+  assert.ok(Math.abs(volumeToMasterGain(0.5, false) - MAX_MASTER_GAIN * 0.5) < 1e-6);
+
+  const rows = formatPerfDetailRows({
+    ...INITIAL_PERF_TELEMETRY,
+    fps: 61.5,
+    frameMs: 16.25,
+    cpuMs: 4.12,
+    calls: 88,
+    triangles: 42310,
+    objects: 512,
+    geometries: 190,
+    textures: 64,
+    loadedModels: 18,
+    loadedCars: 6,
+    loadedEnvironmentModels: 12,
+    networkMb: 2.56,
+    averageLoadMs: 145,
+  });
+
+  assert.deepEqual(
+    rows.map((r) => r.label),
+    ['Frame', 'CPU', 'Draws', 'Scene', 'Renderer', 'Models', 'Network'],
+  );
+  assert.equal(rows.some((r) => /fps/i.test(r.label) || /fps/i.test(r.value)), false);
+  assert.equal(rows[0].value, '16.25 ms');
+  assert.equal(rows[2].value, `88 calls · ${(42310).toLocaleString()} triangles`);
+});
+
+test('generateSakuraSceneryPlacements prevents road/barrier overlaps and caps heavy landmarks', async () => {
+  const { DEFAULT_SAKURA_FOOTPRINTS, generateSakuraSceneryPlacements } = await import('./sceneryPlacement');
+  const sakuraDef = STARTER_TRACKS.find((t) => t.id === 'sakura-pass')!;
+  const canyonDef = STARTER_TRACKS.find((t) => t.id === 'canyon-switchback')!;
+
+  for (const def of [sakuraDef, canyonDef]) {
+    const compiled = compileTrack(def, 200);
+    const placements = generateSakuraSceneryPlacements(compiled, DEFAULT_SAKURA_FOOTPRINTS);
+    assert.ok(placements.length >= 25, `${def.name} should place rich roadside & valley scenery (got ${placements.length})`);
+
+    const halfW = compiled.def.roadWidth * 0.5;
+    let minEdgeClearance = Infinity;
+    const landmarkCounts = new Map<string, number>();
+
+    for (const item of placements) {
+      let minDist = Infinity;
+      for (const s of compiled.samples) {
+        const d = Math.hypot(item.x - s.x, item.z - s.z);
+        if (d < minDist) minDist = d;
+      }
+      const edgeClearance = minDist - halfW - item.footprintRadius;
+      if (edgeClearance < minEdgeClearance) minEdgeClearance = edgeClearance;
+      assert.ok(
+        edgeClearance >= 9.0,
+        `${def.name} prop ${item.modelId} encroaches track/barrier clearance: ${edgeClearance.toFixed(2)}m`,
+      );
+      landmarkCounts.set(item.modelId, (landmarkCounts.get(item.modelId) ?? 0) + 1);
+    }
+
+    assert.ok(minEdgeClearance >= 9.0);
+    assert.ok((landmarkCounts.get('sakura_fantasy_architecture') ?? 0) <= 2);
+    assert.ok((landmarkCounts.get('sakura_japanese_temple') ?? 0) <= 2);
+    assert.ok((landmarkCounts.get('sakura_chinese_hall') ?? 0) <= 3);
+  }
+});
+
+test('computeFpsFromFrameMs and formatFpsDisplay match System Details Frame value 1:1', async () => {
+  const { computeFpsFromFrameMs, formatFpsDisplay } = await import('./perfTelemetry');
+
+  assert.equal(computeFpsFromFrameMs(0), 0);
+  assert.equal(computeFpsFromFrameMs(-5), 0);
+  assert.equal(formatFpsDisplay(0), '--');
+
+  // e.g., 32.08 ms -> 31.17 -> 31; 16.67 ms -> 59.98 -> 60; 44.67 ms -> 22.38 -> 22
+  assert.equal(Math.round(computeFpsFromFrameMs(32.08)), 31);
+  assert.equal(formatFpsDisplay(computeFpsFromFrameMs(32.08)), '31');
+  assert.equal(formatFpsDisplay(computeFpsFromFrameMs(16.67)), '60');
+  assert.equal(formatFpsDisplay(computeFpsFromFrameMs(44.67)), '22');
+  assert.equal(formatFpsDisplay(computeFpsFromFrameMs(2000)), '0.5');
+});
+
+test('multi-channel audio mix normalizes all 4 channels and computes channel gain', async () => {
+  const {
+    AUDIO_CHANNELS,
+    DEFAULT_AUDIO_MIX,
+    normalizeAudioMix,
+    volumeToChannelGain,
+  } = await import('./audioSettings');
+
+  assert.deepEqual(
+    AUDIO_CHANNELS.map((c) => c.id),
+    ['master', 'engine', 'sfx', 'ambient'],
+  );
+
+  const normalized = normalizeAudioMix({
+    master: 0.85,
+    engine: 1.4,
+    sfx: -0.2,
+    ambient: 0.456,
+  });
+  assert.deepEqual(normalized, {
+    master: 0.85,
+    engine: 1,
+    sfx: 0,
+    ambient: 0.46,
+  });
+
+  const fallback = normalizeAudioMix(undefined, 0.7);
+  assert.deepEqual(fallback, { ...DEFAULT_AUDIO_MIX, master: 0.7 });
+
+  assert.equal(volumeToChannelGain(0.65, false), 0.65);
+  assert.equal(volumeToChannelGain(0.65, true), 0);
+});
+
+test('GRAPHICS_QUALITY_SPECS cover all 5 presets and match GRAPHICS_PROFILES', async () => {
+  const { GRAPHICS_PROFILES, GRAPHICS_QUALITY_SPECS } = await import('./graphicsQuality');
+
+  assert.deepEqual(
+    GRAPHICS_QUALITY_SPECS.map((s) => s.id),
+    ['AUTO', 'LOW', 'MEDIUM', 'HIGH', 'ULTRA'],
+  );
+
+  for (const level of ['LOW', 'MEDIUM', 'HIGH', 'ULTRA'] as const) {
+    const spec = GRAPHICS_QUALITY_SPECS.find((s) => s.id === level)!;
+    const prof = GRAPHICS_PROFILES[level];
+    assert.ok(spec.scenery.includes(String(prof.sceneryDistance)));
+    assert.ok(spec.opponents.includes(String(prof.opponentDistance)));
+    assert.ok(spec.particles.includes(String(prof.particleCount)));
+    assert.ok(spec.summary.length > 10);
+  }
+});
+
+test('resolveEnvMaterialFlags promotes BLEND foliage textures to crisp alphaTest cutout and preserves glass/opaque materials', async () => {
+  const { resolveEnvMaterialFlags } = await import('./envMaterial');
+
+  const spruceLeaf = resolveEnvMaterialFlags({
+    name: 'branch_01',
+    isTransparent: true,
+    alphaTest: 0,
+    hasAlphaMap: false,
+    isDoubleSided: true,
+    vertexColors: false,
+  });
+  assert.equal(spruceLeaf.transparent, false);
+  assert.ok(spruceLeaf.alphaTest >= 0.36);
+  assert.equal(spruceLeaf.doubleSided, true);
+  assert.equal(spruceLeaf.depthWrite, true);
+
+  const glass = resolveEnvMaterialFlags({
+    name: 'tower_Glass',
+    isTransparent: true,
+    alphaTest: 0,
+    hasAlphaMap: false,
+    isDoubleSided: false,
+    vertexColors: false,
+  });
+  assert.equal(glass.transparent, true);
+  assert.equal(glass.depthWrite, false);
+  assert.equal(glass.alphaTest, 0);
+
+  const bark = resolveEnvMaterialFlags({
+    name: 'arbold',
+    isTransparent: false,
+    alphaTest: 0,
+    hasAlphaMap: false,
+    isDoubleSided: true,
+    vertexColors: true,
+  });
+  assert.equal(bark.transparent, false);
+  assert.equal(bark.alphaTest, 0);
+  assert.equal(bark.doubleSided, true);
+  assert.equal(bark.vertexColors, true);
+});
 
 
 

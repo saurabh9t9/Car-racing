@@ -203,24 +203,24 @@ export const GarageModal: React.FC<GarageModalProps> = ({
       />
 
       {/* Top Header Bar */}
-      <div className="flex items-center justify-between gap-3 shrink-0">
-        <div className="flex items-center gap-3">
-          <h2 className="font-display text-lg sm:text-xl md:text-2xl [@media(max-height:540px)]:text-base font-bold tracking-wider uppercase text-stone-100 drop-shadow">
+      <div className="flex items-center justify-between gap-2 sm:gap-3 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <h2 className="font-display text-base sm:text-xl md:text-2xl [@media(max-height:540px)]:text-base font-bold tracking-wider uppercase text-stone-100 drop-shadow shrink-0">
             GARAGE
           </h2>
           {modelLoading && (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-sm bg-[#18120f]/95 border border-orange-400/25 text-[11px] font-medium text-stone-100">
-              <Loader2 className="w-3 h-3 animate-spin text-orange-400" />
-              <span>Downloading resources...</span>
+            <span className="flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-sm glass-btn-subtle text-[10px] sm:text-[11px] font-medium text-stone-100 truncate max-w-[140px] sm:max-w-none">
+              <Loader2 className="w-3 h-3 animate-spin text-orange-400 shrink-0" />
+              <span className="truncate">Loading...</span>
             </span>
           )}
         </div>
 
-        <div className="pointer-events-auto flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-1 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-0.5 rounded-sm bg-[#18120f]/92 border border-orange-200/15">
+        <div className="pointer-events-auto flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-0.5 rounded-sm glass-btn-dark">
             <label
               htmlFor="garage-driver-name"
-              className="text-[10px] sm:text-[11px] [@media(max-height:540px)]:text-[9px] uppercase tracking-wider font-semibold text-stone-400"
+              className="text-[9.5px] sm:text-[11px] [@media(max-height:540px)]:text-[9px] uppercase tracking-wider font-semibold text-stone-400"
             >
               DRIVER
             </label>
@@ -231,7 +231,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
               value={playerName}
               onChange={(e) => onChangeName(e.target.value)}
               placeholder="Apex Driver"
-              className="w-24 sm:w-36 [@media(max-height:540px)]:w-24 bg-transparent text-xs sm:text-sm [@media(max-height:540px)]:text-[11px] font-semibold text-stone-100 focus:outline-none border-b border-transparent focus:border-orange-400"
+              className="w-20 min-[400px]:w-24 sm:w-36 [@media(max-height:540px)]:w-24 bg-transparent text-xs sm:text-sm [@media(max-height:540px)]:text-[11px] font-semibold text-stone-100 focus:outline-none border-b border-transparent focus:border-orange-400"
             />
           </div>
         </div>
@@ -242,7 +242,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
         <div
           ref={leftDetailsRef}
           data-testid="garage-left-details"
-          className="pointer-events-auto flex flex-col items-stretch w-[min(100%,clamp(206px,54vw,256px))] min-[560px]:[@media(min-aspect-ratio:105/100)]:w-[clamp(212px,22vw,292px)] [@media(max-height:540px)]:w-[clamp(182px,27vw,224px)] gap-[clamp(0.45rem,1.5vh,0.9rem)] [@media(max-height:540px)]:gap-0.5 max-h-full overflow-y-auto no-scrollbar"
+          className="pointer-events-auto flex flex-col items-stretch w-[min(100%,clamp(196px,56vw,256px))] min-[560px]:[@media(min-aspect-ratio:105/100)]:w-[clamp(212px,22vw,292px)] [@media(max-height:540px)]:w-[clamp(182px,27vw,224px)] gap-[clamp(0.45rem,1.5vh,0.9rem)] [@media(max-height:540px)]:gap-0.5 max-h-full overflow-y-auto no-scrollbar"
         >
           {/* Top Block: Brand, Model, PR Pill, Core Spec Table */}
           <div className="w-full min-w-0 space-y-[clamp(0.3rem,1vh,0.6rem)] [@media(max-height:540px)]:space-y-0.5">
@@ -347,7 +347,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                   <button
                     type="button"
                     onClick={() => onChangeCar(buildModelConfig(DEFAULT_CAR_CONFIG, activeSpec))}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xs bg-white/10 hover:bg-orange-500/20 border border-white/10 text-stone-200 hover:text-white transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-xs glass-btn-subtle text-stone-200 hover:text-white transition-all cursor-pointer"
                   >
                     <RotateCcw className="w-3 h-3" />
                     <span>Reset</span>
@@ -391,7 +391,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
             <button
               type="button"
               onClick={() => setCardPage((p) => (p === 'specs' ? 'tune' : 'specs'))}
-              className="w-full flex items-center justify-between px-3 py-1.5 [@media(max-height:540px)]:px-2 [@media(max-height:540px)]:py-0.5 rounded-sm border border-orange-300/20 bg-[#18120f]/80 hover:bg-[#241b16]/90 hover:border-orange-400/45 text-[10px] [@media(max-height:540px)]:text-[8.5px] font-display font-bold uppercase tracking-wider text-stone-100 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between px-3 py-1.5 [@media(max-height:540px)]:px-2 [@media(max-height:540px)]:py-0.5 rounded-sm glass-btn-dark text-[10px] [@media(max-height:540px)]:text-[8.5px] font-display font-bold uppercase tracking-wider text-stone-100 transition-all cursor-pointer active:scale-[0.98]"
             >
               <span className="inline-flex items-center gap-1.5">
                 {cardPage === 'specs' ? (
@@ -422,7 +422,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
       <div className="shrink-0 space-y-1.5 sm:space-y-2 [@media(max-height:540px)]:space-y-0.5">
         {/* Category Tabs + Prev/Next Controls */}
         <div className="pointer-events-auto flex items-center justify-between gap-2">
-          <div className="inline-flex items-center gap-1 p-1 [@media(max-height:540px)]:p-0.5 rounded-sm bg-[#16110e]/95 border border-orange-200/15 overflow-x-auto no-scrollbar">
+          <div className="inline-flex items-center gap-1 p-1 [@media(max-height:540px)]:p-0.5 rounded-sm bg-[#16110e]/75 backdrop-blur-md border border-orange-200/15 overflow-x-auto no-scrollbar min-w-0">
             {CATEGORY_TABS.map((tab) => {
               const active = category === tab;
               return (
@@ -430,10 +430,10 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                   key={tab}
                   type="button"
                   onClick={() => setCategory(tab)}
-                  className={`px-3 sm:px-3.5 py-1 [@media(max-height:540px)]:px-2 [@media(max-height:540px)]:py-0.5 rounded-xs text-[10px] sm:text-xs [@media(max-height:540px)]:text-[9px] font-display font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0 ${
+                  className={`px-2.5 sm:px-3.5 py-1 [@media(max-height:540px)]:px-2 [@media(max-height:540px)]:py-0.5 rounded-xs text-[10px] sm:text-xs [@media(max-height:540px)]:text-[9px] font-display font-bold uppercase tracking-wider transition-all cursor-pointer shrink-0 active:scale-95 ${
                     active
-                      ? 'bg-gradient-to-b from-orange-400 to-orange-500 text-stone-950 shadow-sm'
-                      : 'text-stone-300 hover:text-white hover:bg-white/10'
+                      ? 'glass-btn-primary text-stone-950'
+                      : 'glass-btn-subtle border-transparent text-stone-300 hover:text-white'
                   }`}
                 >
                   {tab}
@@ -447,7 +447,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
               type="button"
               aria-label="Previous car"
               onClick={() => nudgeCarousel(-1)}
-              className="w-8 h-8 [@media(max-height:540px)]:w-6 [@media(max-height:540px)]:h-6 flex items-center justify-center rounded-sm bg-[#18120f]/92 hover:bg-orange-500/20 border border-orange-200/15 hover:border-orange-400/45 text-stone-200 hover:text-white shadow-sm transition-all cursor-pointer active:scale-95"
+              className="w-8 h-8 [@media(max-height:540px)]:w-6 [@media(max-height:540px)]:h-6 flex items-center justify-center rounded-sm glass-btn-dark text-stone-200 hover:text-white transition-all cursor-pointer active:scale-95"
             >
               <ChevronLeft className="w-4 h-4 [@media(max-height:540px)]:w-3.5 [@media(max-height:540px)]:h-3.5" />
             </button>
@@ -455,7 +455,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
               type="button"
               aria-label="Next car"
               onClick={() => nudgeCarousel(1)}
-              className="w-8 h-8 [@media(max-height:540px)]:w-6 [@media(max-height:540px)]:h-6 flex items-center justify-center rounded-sm bg-[#18120f]/92 hover:bg-orange-500/20 border border-orange-200/15 hover:border-orange-400/45 text-stone-200 hover:text-white shadow-sm transition-all cursor-pointer active:scale-95"
+              className="w-8 h-8 [@media(max-height:540px)]:w-6 [@media(max-height:540px)]:h-6 flex items-center justify-center rounded-sm glass-btn-dark text-stone-200 hover:text-white transition-all cursor-pointer active:scale-95"
             >
               <ChevronRight className="w-4 h-4 [@media(max-height:540px)]:w-3.5 [@media(max-height:540px)]:h-3.5" />
             </button>
@@ -482,7 +482,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
                 aria-label={`Select ${m.name}`}
                 aria-pressed={selected}
                 onClick={() => selectModel(m)}
-                className={`relative w-[clamp(124px,14.5vw,196px)] h-[clamp(64px,13vh,108px)] [@media(max-height:540px)]:w-[108px] [@media(max-height:540px)]:h-[44px] shrink-0 rounded-sm overflow-hidden text-left transition-all cursor-pointer bg-[#161210] ${
+                className={`relative w-[clamp(116px,32vw,196px)] sm:w-[clamp(124px,14.5vw,196px)] h-[clamp(62px,13vh,108px)] [@media(max-height:540px)]:w-[108px] [@media(max-height:540px)]:h-[44px] shrink-0 rounded-sm overflow-hidden text-left transition-all cursor-pointer bg-[#161210]/90 ${
                   selected
                     ? 'border-2 border-orange-400 shadow-[0_0_20px_rgba(249,115,22,0.28)]'
                     : 'border border-white/15 hover:border-orange-300/45 opacity-90 hover:opacity-100'
@@ -542,12 +542,12 @@ export const GarageModal: React.FC<GarageModalProps> = ({
         </div>
 
         {/* Bottom Action Bar */}
-        <div className="pointer-events-auto flex items-center justify-between gap-3 pt-0.5 [@media(max-height:540px)]:pt-0">
-          <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="pointer-events-auto flex items-center justify-between gap-2.5 sm:gap-3 pt-0.5 [@media(max-height:540px)]:pt-0">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-1.5 sm:py-2 [@media(max-height:540px)]:px-3 [@media(max-height:540px)]:py-1 rounded-sm bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 text-stone-950 font-display text-xs [@media(max-height:540px)]:text-[10.5px] font-extrabold uppercase tracking-wider shadow-[0_4px_18px_rgba(249,115,22,0.34)] transition-all cursor-pointer active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 px-3.5 sm:px-5 py-1.5 sm:py-2 [@media(max-height:540px)]:px-3 [@media(max-height:540px)]:py-1 rounded-sm glass-btn-primary text-stone-950 font-display text-xs [@media(max-height:540px)]:text-[10.5px] font-extrabold uppercase tracking-wider transition-all cursor-pointer active:scale-[0.98] whitespace-nowrap"
             >
               <Check className="w-3.5 h-3.5 [@media(max-height:540px)]:w-3 [@media(max-height:540px)]:h-3 stroke-[2.75]" />
               <span>Select Ride</span>
@@ -556,7 +556,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-1 rounded-sm bg-[#18120f]/92 hover:bg-[#261d18] border border-orange-200/20 hover:border-orange-300/45 text-xs [@media(max-height:540px)]:text-[10.5px] font-display font-bold uppercase tracking-wider text-stone-100 shadow-sm transition-all cursor-pointer active:scale-[0.98]"
+              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 [@media(max-height:540px)]:px-2.5 [@media(max-height:540px)]:py-1 rounded-sm glass-btn-dark text-xs [@media(max-height:540px)]:text-[10.5px] font-display font-bold uppercase tracking-wider text-stone-100 transition-all cursor-pointer active:scale-[0.98] whitespace-nowrap"
             >
               <ArrowLeft className="w-3.5 h-3.5 [@media(max-height:540px)]:w-3 [@media(max-height:540px)]:h-3" />
               <span>Back</span>
@@ -565,7 +565,7 @@ export const GarageModal: React.FC<GarageModalProps> = ({
 
           <div
             data-testid="garage-counter"
-            className="font-mono-num text-[11px] sm:text-xs font-semibold tracking-wider text-stone-300"
+            className="font-mono-num text-[10.5px] sm:text-xs font-semibold tracking-wider text-stone-300 shrink-0"
           >
             {selectedIndex + 1} OF {filteredModels.length}
           </div>

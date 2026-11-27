@@ -4,9 +4,11 @@ import Flag from 'lucide-react/dist/esm/icons/flag.js';
 import MapIcon from 'lucide-react/dist/esm/icons/map.js';
 import Paintbrush from 'lucide-react/dist/esm/icons/paintbrush.js';
 import PenTool from 'lucide-react/dist/esm/icons/pen-tool.js';
+import Settings from 'lucide-react/dist/esm/icons/settings.js';
 import Users from 'lucide-react/dist/esm/icons/users.js';
 import Volume2 from 'lucide-react/dist/esm/icons/volume-2.js';
 import VolumeX from 'lucide-react/dist/esm/icons/volume-x.js';
+import { formatFpsDisplay } from '../shared/perfTelemetry';
 
 interface TitleOverlayProps {
   onQuickRace: () => void;
@@ -14,8 +16,10 @@ interface TitleOverlayProps {
   onOpenGarage: () => void;
   onOpenMap: () => void;
   onOpenStudio: () => void;
+  onOpenSettings: () => void;
   muted: boolean;
   onToggleMute: () => void;
+  fps: number;
 }
 
 export const TitleOverlay: React.FC<TitleOverlayProps> = ({
@@ -24,8 +28,10 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
   onOpenGarage,
   onOpenMap,
   onOpenStudio,
+  onOpenSettings,
   muted,
   onToggleMute,
+  fps,
 }) => {
   return (
     <div className="fixed inset-0 z-20 flex items-center pointer-events-none overflow-y-auto overflow-x-hidden no-scrollbar select-none">
@@ -53,33 +59,62 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
         }}
       />
 
-      {/* Top-Right Mute Button */}
-      <button
-        type="button"
-        tabIndex={-1}
-        onClick={(e) => {
-          e.currentTarget.blur();
-          onToggleMute();
-        }}
-        aria-label={muted ? 'Unmute audio' : 'Mute audio'}
-        className="pointer-events-auto fixed top-[max(1rem,calc(var(--safe-top)+0.5rem))] right-[max(1rem,calc(var(--safe-right)+0.75rem))] sm:top-6 sm:right-8 z-30 w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-[#101317]/95 hover:bg-[#1D2025] border border-[#FF321E]/40 hover:border-[#FF5A00]/80 flex items-center justify-center text-[#F5F5F5] transition-colors cursor-pointer shadow-[0_3px_15px_rgba(0,0,0,0.5)]"
-      >
-        {muted ? (
-          <VolumeX className="w-4 h-4 text-[#FF5A00]" />
-        ) : (
-          <Volume2 className="w-4 h-4 text-[#F5F5F5]" />
-        )}
-      </button>
+      {/* Top-Right Settings, Mute & FPS Readout */}
+      <div className="pointer-events-auto fixed top-[max(0.75rem,calc(var(--safe-top)+0.4rem))] right-[max(0.75rem,calc(var(--safe-right)+0.55rem))] sm:top-6 sm:right-8 z-30 flex items-center gap-1.5 sm:gap-2">
+        <button
+          type="button"
+          tabIndex={-1}
+          data-testid="btn-title-settings"
+          onClick={(e) => {
+            e.currentTarget.blur();
+            onOpenSettings();
+          }}
+          aria-label="Settings"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg glass-btn-dark flex items-center justify-center text-[#F5F5F5] transition-all cursor-pointer active:scale-95"
+        >
+          <Settings className="w-4 h-4 text-[#F5F5F5]" />
+        </button>
+
+        <button
+          type="button"
+          tabIndex={-1}
+          data-testid="btn-title-mute"
+          onClick={(e) => {
+            e.currentTarget.blur();
+            onToggleMute();
+          }}
+          aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg glass-btn-dark flex items-center justify-center text-[#F5F5F5] transition-all cursor-pointer active:scale-95"
+        >
+          {muted ? (
+            <VolumeX className="w-4 h-4 text-[#FF5A00]" />
+          ) : (
+            <Volume2 className="w-4 h-4 text-[#F5F5F5]" />
+          )}
+        </button>
+
+        <div
+          data-testid="title-fps"
+          className="h-9 sm:h-10 px-2.5 sm:px-3 rounded-lg glass-panel border border-white/15 flex items-baseline gap-1.5 justify-center"
+        >
+          <span className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase self-center">
+            FPS
+          </span>
+          <span className="font-mono-num text-xs sm:text-sm font-bold text-white tabular-nums self-center">
+            {formatFpsDisplay(fps)}
+          </span>
+        </div>
+      </div>
 
       {/* Left-Aligned Title & Action Stack */}
-      <div className="relative z-10 w-full px-[max(1.25rem,calc(var(--safe-left)+1rem))] sm:px-8 md:px-10 py-4 [@media(max-height:460px)]:py-2">
-        <div className="pointer-events-auto w-full max-w-[332px] [@media(max-height:460px)]:max-w-[292px] space-y-4 [@media(max-height:460px)]:space-y-2.5">
+      <div className="relative z-10 w-full px-[max(1rem,calc(var(--safe-left)+0.75rem))] sm:px-8 md:px-10 py-4 [@media(max-height:460px)]:py-2">
+        <div className="pointer-events-auto w-full max-w-[min(100%,320px)] sm:max-w-[332px] [@media(max-height:460px)]:max-w-[284px] space-y-3.5 sm:space-y-4 [@media(max-height:460px)]:space-y-2">
 
           {/* Brand Emblem + Tagline */}
           <div>
             <svg
               viewBox="0 0 380 86"
-              className="w-[235px] sm:w-[275px] [@media(max-height:460px)]:w-[195px] h-auto drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]"
+              className="w-[210px] min-[380px]:w-[235px] sm:w-[275px] [@media(max-height:460px)]:w-[185px] h-auto drop-shadow-[0_2px_10px_rgba(0,0,0,0.65)]"
               role="img"
               aria-label="Turbo Drifter"
             >
@@ -119,7 +154,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               />
             </svg>
 
-            <p className="mt-2.5 [@media(max-height:460px)]:mt-1.5 text-xs sm:text-[13px] [@media(max-height:460px)]:text-[11px] leading-relaxed [@media(max-height:460px)]:leading-snug text-[#D5D9DF] max-w-[320px]">
+            <p className="mt-2 [@media(max-height:460px)]:mt-1 text-xs sm:text-[13px] [@media(max-height:460px)]:text-[11px] leading-relaxed [@media(max-height:460px)]:leading-snug text-[#D5D9DF] max-w-[320px]">
               Build custom racers, sketch freehand circuits, join friends, and bash rivals off the apex.
             </p>
           </div>
@@ -135,7 +170,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                 e.currentTarget.blur();
                 onQuickRace();
               }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 [@media(max-height:460px)]:py-2 rounded-lg bg-gradient-to-r from-[#FF5A00] via-[#FF7820] to-[#FFC247] hover:from-[#FF7424] hover:via-[#FF8B32] hover:to-[#FFD16B] text-[#141414] font-display font-bold text-sm sm:text-[15px] [@media(max-height:460px)]:text-xs tracking-wide shadow-[0_4px_18px_rgba(255,90,0,0.22)] transition-all cursor-pointer whitespace-nowrap"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 [@media(max-height:460px)]:py-1.5 rounded-lg glass-btn-primary text-[#141414] font-display font-bold text-sm sm:text-[15px] [@media(max-height:460px)]:text-xs tracking-wide transition-all cursor-pointer active:scale-[0.98] whitespace-nowrap"
             >
               <Flag className="w-4 h-4 [@media(max-height:460px)]:w-3.5 [@media(max-height:460px)]:h-3.5 shrink-0" />
               <span>Race (Solo + AI)</span>
@@ -148,7 +183,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                 e.currentTarget.blur();
                 onOpenMultiplayer();
               }}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 [@media(max-height:460px)]:py-1.5 rounded-lg bg-[#101317]/95 hover:bg-[#1B1E23] border border-[#FF321E]/40 hover:border-[#FF5A00]/80 text-[#F5F5F5] font-semibold text-xs sm:text-[13px] [@media(max-height:460px)]:text-xs tracking-wide transition-all cursor-pointer whitespace-nowrap"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 [@media(max-height:460px)]:py-1.5 rounded-lg glass-btn-dark text-[#F5F5F5] font-semibold text-xs sm:text-[13px] [@media(max-height:460px)]:text-xs tracking-wide transition-all cursor-pointer active:scale-[0.98] whitespace-nowrap"
             >
               <Users className="w-3.5 h-3.5 text-[#079FE0] shrink-0" />
               <span>Multiplayer</span>
@@ -163,7 +198,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                   e.currentTarget.blur();
                   onOpenGarage();
                 }}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 [@media(max-height:460px)]:py-1.5 rounded-lg bg-[#101317]/95 hover:bg-[#1B1E23] border border-[#FF321E]/40 hover:border-[#FF5A00]/80 text-[#F5F5F5] font-semibold text-xs sm:text-[13px] [@media(max-height:460px)]:text-xs transition-all cursor-pointer whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 [@media(max-height:460px)]:py-1.5 rounded-lg glass-btn-dark text-[#F5F5F5] font-semibold text-xs sm:text-[13px] [@media(max-height:460px)]:text-xs transition-all cursor-pointer active:scale-[0.98] whitespace-nowrap"
               >
                 <Paintbrush className="w-3.5 h-3.5 text-[#FF5A00] shrink-0" />
                 <span>Garage</span>
@@ -175,7 +210,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                   e.currentTarget.blur();
                   onOpenMap();
                 }}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 [@media(max-height:460px)]:py-1.5 rounded-lg bg-[#101317]/95 hover:bg-[#1B1E23] border border-[#FF321E]/40 hover:border-[#FF5A00]/80 text-[#F5F5F5] font-semibold text-xs sm:text-[13px] [@media(max-height:460px)]:text-xs transition-all cursor-pointer whitespace-nowrap"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 [@media(max-height:460px)]:py-1.5 rounded-lg glass-btn-dark text-[#F5F5F5] font-semibold text-xs sm:text-[13px] [@media(max-height:460px)]:text-xs transition-all cursor-pointer active:scale-[0.98] whitespace-nowrap"
               >
                 <MapIcon className="w-3.5 h-3.5 text-[#079FE0] shrink-0" />
                 <span>Map</span>
@@ -189,7 +224,7 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                 e.currentTarget.blur();
                 onOpenStudio();
               }}
-              className="w-full flex items-center justify-center gap-1.5 px-4 py-2 [@media(max-height:460px)]:py-1.5 rounded-lg bg-[#101317]/95 hover:bg-[#1B1E23] border border-[#FF321E]/40 hover:border-[#FF5A00]/80 text-[#F5F5F5] font-semibold text-xs sm:text-[13px] [@media(max-height:460px)]:text-xs transition-all cursor-pointer whitespace-nowrap"
+              className="w-full flex items-center justify-center gap-1.5 px-4 py-2 [@media(max-height:460px)]:py-1.5 rounded-lg glass-btn-dark text-[#F5F5F5] font-semibold text-xs sm:text-[13px] [@media(max-height:460px)]:text-xs transition-all cursor-pointer active:scale-[0.98] whitespace-nowrap"
             >
               <PenTool className="w-3.5 h-3.5 text-[#FF5A00] shrink-0" />
               <span>Track Studio</span>
